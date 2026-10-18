@@ -1,0 +1,22 @@
+<Bindings>
+	<Layer name="SI_KEYBINDINGS_CATEGORY_GENERAL">
+		<Category name="XL Gear Banker">
+			<Action name="TOGGLE_XLGB_UI" rebindable="true">
+				<Down>XLGB_UI:ToggleAllUI()</Down>
+			</Action>
+			<Action name="TOGGLE_XLGB_WW" rebindable="true">
+				<Down>XLGB_UI:ToggleWardrobeUI()</Down>
+			</Action>
+		</Category>
+	</Layer>
+	
+<!-- Deposit Gear-->
+	<!-- <Layer name="SI_KEYBINDINGS_CATEGORY_GENERAL">
+		<Category name="XL Gear Banker">
+			<Action name="DEPOSIT_GEAR_SET_1">
+				<Down>XLGB_Banking:DepositGear(1)</Down>
+			</Action>
+		</Category>
+		</Layer> -->
+
+</Bindings>
