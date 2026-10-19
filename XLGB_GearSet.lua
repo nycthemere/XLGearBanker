@@ -252,22 +252,30 @@ function XLGB_GearSet:AddSetItemsToGearSet(setItems, setName, gearSetNumber, sou
 
   -- If the gear set has no items and still has default name (e.g. "My XLGB Set"), auto-rename to the set's name
   if #gearSet.items == 0 and gearSet.name:match("^My X+LGB Set$") then
-    XLGB_GearSet:EditGearSetName(setName, gearSetNumber)
-    gearSet = XLGB_GearSet:GetGearSet(gearSetNumber)
+    local targetName = setName
+    local counter = 2
+    while not isNameUnique(targetName) and targetName ~= gearSet.name do
+      targetName = string.format("%s (%d)", setName, counter)
+      counter = counter + 1
+    end
+    if XLGB_GearSet:EditGearSetName(targetName, gearSetNumber) then
+      gearSetNumber = XLGB_GearSet:GetGearSetIndex(targetName)
+      gearSet = XLGB_GearSet:GetGearSet(gearSetNumber)
+    end
   end
 
   local addedCount = 0
   for _, itemData in pairs(setItems) do
     if (XLGB_GearSet:GetItemIndexInGearSet(itemData.ID, gearSetNumber) == XLGB.ITEM_NOT_IN_SET) then
       local entry = XLGB_GearSet:CreateItemData(itemData.link, itemData.ID)
-      table.insert(sV.gearSetList[gearSetNumber].items, entry)
+      table.insert(gearSet.items, entry)
       addedCount = addedCount + 1
     end
   end
 
   local srcText = sourceLabel and (" (" .. sourceLabel .. ")") or ""
   if addedCount > 0 then
-    table.sort(sV.gearSetList[gearSetNumber].items, compareItems)
+    table.sort(gearSet.items, compareItems)
     XLGB_Events:OnGearSetItemAdd(gearSet, sV.gearSetList[gearSetNumber])
     d(XLGB_GetString("SET_ADDED_ITEMS", addedCount, setName, srcText, gearSet.name))
     PlaySound(SOUNDS.INVENTORY_ITEM_APPLY_CHARGE)
@@ -275,7 +283,7 @@ function XLGB_GearSet:AddSetItemsToGearSet(setItems, setName, gearSetNumber, sou
     d(XLGB_GetString("SET_ALL_PRESENT", setName, srcText, gearSet.name))
   end
 
-  return addedCount
+  return addedCount, gearSetNumber
 end
 
 function XLGB_GearSet:AddBankSetToGearSet(setItems, setName, gearSetNumber)

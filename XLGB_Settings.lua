@@ -12,8 +12,8 @@ function XLGB_Settings:Initialize()
     type = "panel",
     name = menuName,
     displayName = "|cffecbc" .. menuName .. "|r",
-    author = "|c783f04nyc|r|c8fce00thé|r|c6a329fmère|r (original: @XL_Olsen)",
-    version = "1.1.0",
+    author = XLGearBanker.author,
+    version = XLGearBanker.version,
     slashCommand = "/xlgb_settings",
     registerForRefresh = true
     -- registerForDefaults = true,

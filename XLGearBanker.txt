@@ -8,7 +8,6 @@
 ## AddOnName: XLGearBanker
 ## Description: XL Gear Banker (XLGB) is an ESO addon that strives to combat the tedious task of moving all your gear to another character. Automatic gear banking & withdrawal, quality filters and Wizard's Wardrobe synchronization.
 ## Author: |c783f04nyc|r|c8fce00thé|r|c6a329fmère|r (original: @XL_Olsen)
-## Version: 1.1.0
 ## APIVersion: 101051 101052
 ## SavedVariables: XLGearBankerSavedVariables
 ## DependsOn: LibAddonMenu-2.0>=41 LibScrollableMenu>=20400 LibSets>=9000 LibCustomMenu LibDialog LibShifterBox

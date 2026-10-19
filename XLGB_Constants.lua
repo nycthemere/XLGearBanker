@@ -1,4 +1,50 @@
-XLGB_Constants = {}
+-- =========================================================
+-- XLGearBanker - Constants
+-- =========================================================
+
+XLGearBanker = XLGearBanker or {}
+XLGB_Constants = XLGB_Constants or {}
+
+-- ── Logger (disponible immédiatement pour tous les modules) ──
+if LibDebugLogger then
+    XLGearBanker.logger = LibDebugLogger("XLGearBanker")
+else
+    local noop = function() end
+    local stub = {
+        Info    = noop,
+        Debug   = noop,
+        Warn    = noop,
+        Error   = noop,
+        Verbose = noop,
+        Create  = function(self, _tag) return self end,
+    }
+    XLGearBanker.logger = stub
+end
+
+-- ── Constants ─────────────────────────────────────────────
+local C = {
+    ADDON_NAME    = "XLGearBanker",
+    ADDON_TITLE   = "XL Gear Banker",
+    ADDON_VERSION = "2026.10.19",
+    AUTHOR        = "|c783f04nyc|r|c8fce00thé|r|c6a329fmère|r (original: @XL_Olsen)",
+
+    COLORS = {
+        GOLD  = "|cffecbc",
+        WHITE = "|cffffff",
+        RED   = "|cff0000",
+        GREEN = "|c00ff00",
+    },
+}
+
+-- Rendre les métadonnées et constantes accessibles immédiatement
+XLGearBanker.name      = C.ADDON_NAME
+XLGearBanker.version   = C.ADDON_VERSION
+XLGearBanker.author    = C.AUTHOR
+XLGearBanker.Constants = C
+
+for k, v in pairs(C) do
+    XLGB_Constants[k] = v
+end
 
 function XLGB_Constants:Initialize()
     --Bags

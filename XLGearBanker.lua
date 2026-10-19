@@ -1,9 +1,9 @@
 -- Namespace
-XLGearBanker = {}
+XLGearBanker = XLGearBanker or {}
 
-XLGearBanker.name = "XLGearBanker"
-XLGearBanker.version = "1.1.0"
-XLGearBanker.author = "|c783f04nyc|r|c8fce00thé|r|c6a329fmère|r (original: @XL_Olsen)"
+XLGearBanker.name = XLGearBanker.name or (XLGB_Constants and XLGB_Constants.ADDON_NAME) or "XLGearBanker"
+XLGearBanker.version = XLGearBanker.version or (XLGB_Constants and XLGB_Constants.ADDON_VERSION) or "2026.10.19"
+XLGearBanker.author = XLGearBanker.author or (XLGB_Constants and XLGB_Constants.AUTHOR) or "|c783f04nyc|r|c8fce00thé|r|c6a329fmère|r (original: @XL_Olsen)"
 
 -- Default settings.
 XLGearBanker.savedVariables = {
@@ -53,7 +53,10 @@ function XLGearBanker.OnAddOnLoaded(event, addonName)
 end
 
 function easyDebug(...)
-  if sV.debug == true then
+  if XLGearBanker.logger and XLGearBanker.logger.Debug then
+    XLGearBanker.logger:Debug(...)
+  end
+  if sV and sV.debug == true then
     d("[XLGB_DEBUG] " .. ...)
   end
 end
@@ -61,6 +64,7 @@ end
 function XLGearBanker:Initialize()
   self.savedVariables = ZO_SavedVars:NewAccountWide("XLGearBankerSavedVariables", 1, nil, XLGearBanker.savedVariables)
   sV = XLGearBanker.savedVariables
+  sV.addonVersion = XLGearBanker.version
   if sV.showWardrobeWindowOnOpen == nil then
     sV.showWardrobeWindowOnOpen = true
   end

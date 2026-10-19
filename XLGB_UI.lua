@@ -1728,13 +1728,25 @@ function XLGB_UI:OnBankSetSelected(setEntry)
     sourceLabel = XLGB_GetString("SET_SOURCE_BAG_LABEL")
   end
 
-  local addedCount = XLGB_GearSet:AddSetItemsToGearSet(setEntry.items, setEntry.setName, displayingSet, sourceLabel)
+  local addedCount, newSetIndex = XLGB_GearSet:AddSetItemsToGearSet(setEntry.items, setEntry.setName, displayingSet, sourceLabel)
+  if newSetIndex then
+    displayingSet = newSetIndex
+  else
+    displayingSet = sV.displayingSet
+  end
+
+  gearSet = XLGB_GearSet:GetGearSet(displayingSet)
 
   if xl.isSetEditable then
     xl.itemChanges = true
-    gearSet = XLGB_GearSet:GetGearSet(displayingSet)
     if gearSet and ui.set.setRow.editName then
       ui.set.setRow.editName:SetText(gearSet.name)
+    end
+    if gearSet then
+      xl.oldSetName = gearSet.name
+      if xl.copyOfSet then
+        xl.copyOfSet.name = gearSet.name
+      end
     end
   end
 
