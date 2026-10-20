@@ -4,8 +4,8 @@
 			<Action name="TOGGLE_XLGB_UI" rebindable="true">
 				<Down>XLGB_UI:ToggleAllUI()</Down>
 			</Action>
-			<Action name="TOGGLE_XLGB_WW" rebindable="true">
-				<Down>XLGB_UI:ToggleWardrobeUI()</Down>
+			<Action name="XLGB_QUICK_SET_TOGGLE" rebindable="true">
+				<Down>XLGB_Command:OnQuickSetKeybindPressed()</Down>
 			</Action>
 		</Category>
 	</Layer>

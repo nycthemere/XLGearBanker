@@ -1299,11 +1299,20 @@
       <Anchor point="BOTTOMRIGHT" offsetX="-6" offsetY="0" />
       <Center file="/esoui/art/buttons/gamepad/inline_controllerbkg_darkgrey-center.dds"/>
     </Backdrop>
+    <Button name="$(parent)_QuickSet" inherits="ZO_ButtonBehaviorClickSound">
+      <Dimensions x="20" y="20"/>
+      <Anchor point="LEFT" relativeTo="$(parent)" relativePoint="LEFT" offsetX="10" offsetY="0"/>
+      <Controls>
+        <Texture name="$(parent)_Icon" textureFile="/esoui/art/collections/favorite_staronly.dds">
+          <AnchorFill/>
+        </Texture>
+      </Controls>
+    </Button>
     <Label name="$(parent)_Count" font="ZoFontGameSmall" text="(5 pieces)" maxLineCount="1" wrapMode="ELLIPSIS">
       <Anchor point="RIGHT" relativeTo="$(parent)" relativePoint="RIGHT" offsetX="-15" offsetY="0"/>
     </Label>
     <Label name="$(parent)_Name" font="ZoFontWinH4" text="|cffecbcSet Name|r" maxLineCount="1" wrapMode="ELLIPSIS">
-      <Anchor point="LEFT" relativeTo="$(parent)" relativePoint="LEFT" offsetX="12" offsetY="0"/>
+      <Anchor point="LEFT" relativeTo="$(parent)_QuickSet" relativePoint="RIGHT" offsetX="6" offsetY="0"/>
       <Anchor point="RIGHT" relativeTo="$(parent)_Count" relativePoint="LEFT" offsetX="-8" offsetY="0"/>
     </Label>
   </Controls>

@@ -35,7 +35,10 @@ XLGearBanker.savedVariables = {
   setWithdrawQualities = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true },
   setDepositQualities = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true },
   wardrobeWithdrawQualities = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true },
-  wardrobeDepositQualities = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true }
+  wardrobeDepositQualities = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true },
+  quickSetTargetName = "",
+  quickSetChoices = {},
+  quickSetUndoStack = {}
 }
 
 function XLGearBanker.OnAddOnLoaded(event, addonName)
@@ -46,6 +49,7 @@ function XLGearBanker.OnAddOnLoaded(event, addonName)
     XLGB_Page:Initialize()
     XLGB_Banking:Initialize()
     XLGB_Wardrobe:Initialize()
+    XLGB_Command:Initialize()
     XLGB_MenuOverWriter:Initialize()
     XLGB_Settings:Initialize()
     XLGB_UI:Initialize()
@@ -103,6 +107,15 @@ function XLGearBanker:Initialize()
   sV.setDepositQualities = ensureQualityTable(sV.setDepositQualities, sV.depositQualities)
   sV.wardrobeWithdrawQualities = ensureQualityTable(sV.wardrobeWithdrawQualities, sV.withdrawQualities)
   sV.wardrobeDepositQualities = ensureQualityTable(sV.wardrobeDepositQualities, sV.depositQualities)
+  if sV.quickSetTargetName == nil then
+    sV.quickSetTargetName = ""
+  end
+  if sV.quickSetChoices == nil then
+    sV.quickSetChoices = {}
+  end
+  if sV.quickSetUndoStack == nil then
+    sV.quickSetUndoStack = {}
+  end
 end
 
 EVENT_MANAGER:RegisterForEvent(XLGearBanker.name, EVENT_ADD_ON_LOADED, XLGearBanker.OnAddOnLoaded)

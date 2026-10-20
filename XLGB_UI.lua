@@ -2417,6 +2417,10 @@ local function fillWardrobeHeaderRowWithData(control, data)
   control.data = data
   local nameLabel = control:GetNamedChild("_Name")
   local countLabel = control:GetNamedChild("_Count")
+  local quickSetBtn = control:GetNamedChild("_QuickSet")
+
+  local sV = XLGearBanker.savedVariables
+  local isCurrentTarget = (sV and sV.quickSetTargetName and sV.quickSetTargetName ~= "" and sV.quickSetTargetName == data.name)
 
   if nameLabel then
     nameLabel:SetText("|cffecbc" .. (data.name or "") .. "|r")
@@ -2441,15 +2445,125 @@ local function fillWardrobeHeaderRowWithData(control, data)
     end
   end
 
+  local function triggerQuickSetSelection(anchorCtrl)
+    local charId = (XLGB_Wardrobe and XLGB_Wardrobe.selectedCharId) or (GetCurrentCharacterId and tostring(Id64ToString(GetCurrentCharacterId())))
+    local zoneTag = (XLGB_Wardrobe and XLGB_Wardrobe.selectedZoneTag) or (WizardsWardrobe and WizardsWardrobe.selection and WizardsWardrobe.selection.zone and WizardsWardrobe.selection.zone.tag) or "GEN"
+    local pageId = (XLGB_Wardrobe and XLGB_Wardrobe.selectedPageId) or (WizardsWardrobe and WizardsWardrobe.selection and WizardsWardrobe.selection.pageId) or 1
+    local matches = (XLGB_Command and XLGB_Command.FindSetupsWithSet) and XLGB_Command:FindSetupsWithSet(zoneTag, pageId, data.name) or {}
+
+    if #matches > 1 then
+      ClearMenu()
+      local title = "|cffecbc=== " .. data.name .. " ===|r"
+      AddCustomMenuItem(title, nil)
+      local purposeText = "|cffffff" .. XLGB_GetString("QUICK_SET_CONFLICT_MENU_PURPOSE") .. "|r"
+      AddCustomMenuItem(purposeText, nil)
+      local conflictHeader = string.format("|cffff00" .. XLGB_GetString("QUICK_SET_CONFLICT_MENU_HEADER") .. "|r", data.name, #matches)
+      AddCustomMenuItem(conflictHeader, nil)
+      for _, m in ipairs(matches) do
+        local label = string.format("  > [%d] %s", m.index, m.name)
+        AddCustomMenuItem(label, function()
+          if XLGB_Command then
+            XLGB_Command:SetTargetSetName(data.name, m.index, m.name, charId, zoneTag, pageId)
+            if XLGB_UI and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
+          end
+        end)
+      end
+      ShowMenu(anchorCtrl or control)
+    else
+      local idx = (matches[1] and matches[1].index) or nil
+      local name = (matches[1] and matches[1].name) or nil
+      if XLGB_Command then
+        XLGB_Command:SetTargetSetName(data.name, idx, name, charId, zoneTag, pageId)
+        if XLGB_UI and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
+      end
+    end
+  end
+
+  if quickSetBtn then
+    local quickSetIcon = quickSetBtn:GetNamedChild("_Icon")
+
+    if data.isIsolated then
+      quickSetBtn:SetHidden(true)
+      if nameLabel then
+        nameLabel:ClearAnchors()
+        nameLabel:SetAnchor(LEFT, control, LEFT, 12, 0)
+        nameLabel:SetAnchor(RIGHT, countLabel, LEFT, -8, 0)
+      end
+    else
+      quickSetBtn:SetHidden(false)
+      if nameLabel then
+        nameLabel:ClearAnchors()
+        nameLabel:SetAnchor(LEFT, quickSetBtn, RIGHT, 6, 0)
+        nameLabel:SetAnchor(RIGHT, countLabel, LEFT, -8, 0)
+      end
+
+      local function applyColor(r, g, b, a)
+        if quickSetIcon and quickSetIcon.SetColor then
+          quickSetIcon:SetColor(r, g, b, a)
+        elseif quickSetBtn.SetColor then
+          quickSetBtn:SetColor(r, g, b, a)
+        end
+      end
+
+      if isCurrentTarget then
+        applyColor(1, 0.85, 0.2, 1)
+      else
+        applyColor(0.5, 0.5, 0.5, 0.5)
+      end
+
+      quickSetBtn:SetHandler("OnMouseEnter", function(btn)
+        InitializeTooltip(InformationTooltip, btn, TOPLEFT, 0, -5, BOTTOMLEFT)
+        if isCurrentTarget then
+          SetTooltipText(InformationTooltip, string.format(XLGB_GetString("QUICK_SET_TOOLTIP_ACTIVE"), data.name))
+        else
+          applyColor(1, 0.9, 0.4, 0.9)
+          SetTooltipText(InformationTooltip, string.format(XLGB_GetString("QUICK_SET_TOOLTIP_SET"), data.name))
+        end
+      end)
+
+      quickSetBtn:SetHandler("OnMouseExit", function(btn)
+        ClearTooltip(InformationTooltip)
+        if isCurrentTarget then
+          applyColor(1, 0.85, 0.2, 1)
+        else
+          applyColor(0.5, 0.5, 0.5, 0.5)
+        end
+      end)
+
+      quickSetBtn:SetHandler("OnClicked", function(btn)
+        triggerQuickSetSelection(btn)
+      end)
+
+      quickSetBtn:SetHandler("OnMouseUp", function(btn, button)
+        if button == 2 then
+          triggerQuickSetSelection(btn)
+        end
+      end)
+    end
+  end
+
   control:SetMouseEnabled(true)
   control:SetHandler("OnMouseEnter", function(ctrl)
     if data and data.name and data.name ~= "" then
       InitializeTooltip(InformationTooltip, ctrl, TOPRIGHT, 0, 5, BOTTOMRIGHT)
-      SetTooltipText(InformationTooltip, data.name .. " (" .. string.format(XLGB_GetString("WW_PIECES_COUNT"), data.total or 0) .. ")")
+      local tooltipText = data.name .. " (" .. string.format(XLGB_GetString("WW_PIECES_COUNT"), data.total or 0) .. ")"
+      if not data.isIsolated then
+        if isCurrentTarget then
+          tooltipText = tooltipText .. "\n|c00ff00" .. string.format(XLGB_GetString("QUICK_SET_TOOLTIP_ACTIVE"), data.name) .. "|r"
+        else
+          tooltipText = tooltipText .. "\n|c888888" .. XLGB_GetString("QUICK_SET_ROW_HINT") .. "|r"
+        end
+      end
+      SetTooltipText(InformationTooltip, tooltipText)
     end
   end)
   control:SetHandler("OnMouseExit", function(ctrl)
     ClearTooltip(InformationTooltip)
+  end)
+  control:SetHandler("OnMouseUp", function(ctrl, button)
+    if (button == 1 or button == 2) and data and data.name and data.name ~= "" and not data.isIsolated then
+      triggerQuickSetSelection(ctrl)
+    end
   end)
 end
 
