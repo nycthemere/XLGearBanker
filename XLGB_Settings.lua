@@ -26,12 +26,12 @@ function XLGB_Settings:Initialize()
     optionsTable,
     {
       type = "checkbox",
-      name = XLGB_GetString("SETTINGS_PAGE_ON_OPEN"),
+      name = XLGB_GetString("SETTINGS_SET_ON_OPEN"),
       getFunc = function()
-        return sV.showPageWindowOnOpen
+        return sV.showSetWindowOnOpen
       end,
       setFunc = function(v)
-        sV.showPageWindowOnOpen = v
+        sV.showSetWindowOnOpen = v
       end,
       width = "full"
     }
@@ -41,12 +41,12 @@ function XLGB_Settings:Initialize()
     optionsTable,
     {
       type = "checkbox",
-      name = XLGB_GetString("SETTINGS_SET_ON_OPEN"),
+      name = XLGB_GetString("SETTINGS_PAGE_ON_OPEN"),
       getFunc = function()
-        return sV.showSetWindowOnOpen
+        return sV.showPageWindowOnOpen
       end,
       setFunc = function(v)
-        sV.showSetWindowOnOpen = v
+        sV.showPageWindowOnOpen = v
       end,
       width = "full"
     }

@@ -20,13 +20,13 @@ XLGearBanker.savedVariables = {
   threshold = 70,
   reportMissing = true,
   showSetWindowOnOpen = true,
-  showPageWindowOnOpen = true,
+  showPageWindowOnOpen = false,
   showWardrobeWindowOnOpen = true,
   displayingSet = 1,
   displayingPage = 1,
   wardrobeWindow_x = 640,
   wardrobeWindow_y = 250,
-  wardrobeWindow_width = 380,
+  wardrobeWindow_width = 400,
   wardrobeWindow_height = 640,
   withdrawQualities = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true },
   depositQualities = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true },
@@ -145,6 +145,11 @@ end
 SLASH_COMMANDS["/xlgb"] = function()
   XLGB_UI:ToggleAllUI()
 end
+
+SLASH_COMMANDS["/xlgb_pages"] = function()
+  XLGB_UI:TogglePageUI()
+end
+SLASH_COMMANDS["/xlgb_page"] = SLASH_COMMANDS["/xlgb_pages"]
 
 SLASH_COMMANDS["/xlgb_ww"] = function()
   XLGB_UI:ToggleWardrobeUI()

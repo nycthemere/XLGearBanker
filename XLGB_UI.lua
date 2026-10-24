@@ -159,11 +159,11 @@ function XLGB_UI:OnBankOpen()
   reanchorPageScrollList()
   reanchorSetScrollList()
   XLGB_UI:RefreshQualityFilters()
-  if sV.showPageWindowOnOpen then
-    XLGB_UI:ShowPageUI()
-  end
   if sV.showSetWindowOnOpen then
     XLGB_UI:ShowSetUI()
+  end
+  if sV.showPageWindowOnOpen then
+    XLGB_UI:ShowPageUI()
   end
   if sV.showWardrobeWindowOnOpen and WizardsWardrobe then
     XLGB_UI:ShowWardrobeUI()
@@ -495,15 +495,27 @@ local function CreatePageTooltip(control, text, editText)
   control.tooltipEditText = editText or text -- If no special edit text tooltip, then use default.
 
   local function ShowTooltip(self)
+    local hl = self.GetNamedChild and self:GetNamedChild("_Highlight")
+    if hl then hl:SetHidden(false) end
     InitializeTooltip(InformationTooltip, self, TOPRIGHT, 0, 5, BOTTOMRIGHT)
+    local t = self.tooltipText
+    if type(t) == "function" then
+      t = t(self)
+    end
+    local e = self.tooltipEditText
+    if type(e) == "function" then
+      e = e(self)
+    end
     if not xl.isPageEditable then
-      SetTooltipText(InformationTooltip, self.tooltipText)
+      SetTooltipText(InformationTooltip, t)
     else
-      SetTooltipText(InformationTooltip, self.tooltipEditText)
+      SetTooltipText(InformationTooltip, e)
     end
   end
 
   local function HideTooltip(self)
+    local hl = self.GetNamedChild and self:GetNamedChild("_Highlight")
+    if hl then hl:SetHidden(true) end
     ClearTooltip(InformationTooltip)
   end
 
@@ -516,11 +528,16 @@ local function InitPageWindowTooltips()
   CreatePageTooltip(ui.page.pageRow.accept, XLGB_GetString("PAGE_TOOLTIP_ACCEPT_CHANGES"))
   CreatePageTooltip(ui.page.pageRow.addRemovePage, XLGB_GetString("PAGE_TOOLTIP_CREATE_NEW"), XLGB_GetString("PAGE_TOOLTIP_REMOVE_CURRENT"))
   CreatePageTooltip(ui.page.shifterRow.setEditor, XLGB_GetString("PAGE_TOOLTIP_SET_EDITOR"))
-  CreatePageTooltip(ui.page.titleRow.settings, XLGB_GetString("PAGE_TOOLTIP_SETTINGS"))
+  if ui.page.titleRow.settings then
+    CreatePageTooltip(ui.page.titleRow.settings, XLGB_GetString("PAGE_TOOLTIP_SETTINGS"))
+  end
   if ui.page.titleRow.wardrobe then
     CreatePageTooltip(ui.page.titleRow.wardrobe, XLGB_GetString("PAGE_TOOLTIP_TOGGLE_WARDROBE"))
   end
   CreatePageTooltip(ui.page.totalPageItemsRow.text, XLGB_GetString("PAGE_MAY_CONTAIN_DUPLICATES"))
+  if ui.page.totalPageItemsRow.totalSets then
+    CreatePageTooltip(ui.page.totalPageItemsRow.totalSets, XLGB_GetString("PAGE_TOOLTIP_TOTAL_SETS"))
+  end
   if ui.page.bankRow then
     CreatePageTooltip(ui.page.bankRow.deposit, XLGB_GetString("SET_TOOLTIP_DEPOSIT_ACTIVE"))
     CreatePageTooltip(ui.page.bankRow.withdraw, XLGB_GetString("SET_TOOLTIP_WITHDRAW_ACTIVE"))
@@ -870,7 +887,11 @@ function XLGB_UI:UpdatePageScrollList()
     p.empty:SetHidden(false)
   end
   ZO_ScrollList_Commit(p.scrollList)
-  p.totalPageItemsRow.text:SetText("Total items*: " .. tostring(totalItems))
+  local totalSetsInPage = #scrollData
+  if p.totalPageItemsRow.totalSets then
+    p.totalPageItemsRow.totalSets:SetText(string.format(XLGB_GetString("PAGE_TOTAL_SETS"), totalSetsInPage))
+  end
+  p.totalPageItemsRow.text:SetText(string.format(XLGB_GetString("PAGE_TOTAL_ITEMS"), totalItems))
 end
 
 function XLGB_UI:WithdrawSet(withdrawControl)
@@ -1022,10 +1043,12 @@ function XLGB_UI:ToggleAllUI()
     XLGB_UI:HideSetUI()
     XLGB_UI:HideWardrobeUI()
   else
-    XLGB_UI:ShowPageUI()
     XLGB_UI:ShowSetUI()
-    if WizardsWardrobe then
+    if WizardsWardrobe and sV.showWardrobeWindowOnOpen then
       XLGB_UI:ShowWardrobeUI()
+    end
+    if sV.showPageWindowOnOpen then
+      XLGB_UI:ShowPageUI()
     end
   end
 end
@@ -1117,8 +1140,10 @@ local function InitUIPageVariables()
 
   ui.page.titleRow = XLGB_PageWindow_TitleRow
   ui.page.titleRow.title = XLGB_PageWindow_TitleRow_Title
-  ui.page.titleRow.settings = XLGB_PageWindow_TitleRow_Settings
-  ui.page.titleRow.wardrobe = XLGB_PageWindow_TitleRow_Wardrobe
+  ui.page.titleRow.hide = XLGB_PageWindow_TitleRow_Hide
+  if ui.page.titleRow.title then
+    ui.page.titleRow.title:SetText(XLGB_GetString("TITLE_PAGE"))
+  end
 
   ui.page.pageRow = XLGB_PageWindow_PageRow
   ui.page.pageRow.edit = XLGB_PageWindow_PageRow_EditPage
@@ -1142,6 +1167,7 @@ local function InitUIPageVariables()
 
   ui.page.totalPageItemsRow = XLGB_PageWindow_TotalPageItemsRow
   ui.page.totalPageItemsRow.text = XLGB_PageWindow_TotalPageItemsRow_TotalPageItems
+  ui.page.totalPageItemsRow.totalSets = XLGB_PageWindow_TotalPageItemsRow_TotalPageSets
 
   if ui.page.bankRow.deposit and ui.page.bankRow.deposit:GetNamedChild("_Label") then
     ui.page.bankRow.deposit:GetNamedChild("_Label"):SetText(XLGB_GetString("PAGE_DEPOSIT"))
@@ -1392,10 +1418,18 @@ local function CreateSetTooltip(control, text, editText)
 
   local function ShowTooltip(self)
     InitializeTooltip(InformationTooltip, self, TOPRIGHT, 0, 5, BOTTOMRIGHT)
+    local t = self.tooltipText
+    if type(t) == "function" then
+      t = t(self)
+    end
+    local e = self.tooltipEditText
+    if type(e) == "function" then
+      e = e(self)
+    end
     if not xl.isSetEditable then
-      SetTooltipText(InformationTooltip, self.tooltipText)
+      SetTooltipText(InformationTooltip, t)
     else
-      SetTooltipText(InformationTooltip, self.tooltipEditText)
+      SetTooltipText(InformationTooltip, e)
     end
   end
 
@@ -1418,6 +1452,35 @@ local function InitSetWindowTooltips()
   if ui.set.bankRow then
     CreateSetTooltip(ui.set.bankRow.deposit, XLGB_GetString("SET_TOOLTIP_DEPOSIT_ACTIVE"))
     CreateSetTooltip(ui.set.bankRow.withdraw, XLGB_GetString("SET_TOOLTIP_WITHDRAW_ACTIVE"))
+  end
+  if ui.set.titleRow then
+    if ui.set.titleRow.pages then
+      CreateSetTooltip(ui.set.titleRow.pages, XLGB_GetString("SET_TOOLTIP_TOGGLE_PAGES"))
+    end
+    if ui.set.titleRow.wardrobe then
+      CreateSetTooltip(ui.set.titleRow.wardrobe, XLGB_GetString("PAGE_TOOLTIP_TOGGLE_WARDROBE"))
+    end
+    if ui.set.titleRow.settings then
+      CreateSetTooltip(ui.set.titleRow.settings, XLGB_GetString("PAGE_TOOLTIP_SETTINGS"))
+    end
+  end
+  if ui.set.totalSetItemsRow then
+    if ui.set.totalSetItemsRow.text then
+      CreateSetTooltip(ui.set.totalSetItemsRow.text, function()
+        local count = 0
+        local setNum = sV and sV.displayingSet
+        if setNum and setNum > 0 then
+          local gearSet = XLGB_GearSet:GetGearSet(setNum)
+          if gearSet and gearSet.items then
+            count = #gearSet.items
+          end
+        end
+        return XLGB_GetString("SET_TOTAL_ITEMS", count)
+      end)
+    end
+    if ui.set.totalSetItemsRow.totalSets then
+      CreateSetTooltip(ui.set.totalSetItemsRow.totalSets, XLGB_GetString("SET_TOOLTIP_TOTAL_SETS"))
+    end
   end
 end
 
@@ -1592,11 +1655,11 @@ function XLGB_UI:UpdateBankSetDropdown()
   -- Update row label and tooltip
   if ui.set.bankSetRow.label then
     if isBankOpen then
-      ui.set.bankSetRow.label:SetText("|t20:20:/esoui/art/icons/icon_bank.dds|t|t20:20:/esoui/art/tooltips/icon_bag.dds|t " .. XLGB_GetString("SET_LABEL"))
+      ui.set.bankSetRow.label:SetText(XLGB_GetString("SET_LABEL") .. " |t20:20:/esoui/art/icons/icon_bank.dds|t|t20:20:/esoui/art/tooltips/icon_bag.dds|t")
       ui.set.bankSetRow.label.tooltipText = XLGB_GetString("SET_TOOLTIP_LIBSETS_BOTH")
       ui.set.bankSetRow.label.tooltipEditText = ui.set.bankSetRow.label.tooltipText
     else
-      ui.set.bankSetRow.label:SetText("|t20:20:/esoui/art/tooltips/icon_bag.dds|t " .. XLGB_GetString("SET_LABEL"))
+      ui.set.bankSetRow.label:SetText(XLGB_GetString("SET_LABEL") .. " |t20:20:/esoui/art/tooltips/icon_bag.dds|t")
       ui.set.bankSetRow.label.tooltipText = XLGB_GetString("SET_TOOLTIP_LIBSETS_BAG")
       ui.set.bankSetRow.label.tooltipEditText = ui.set.bankSetRow.label.tooltipText
     end
@@ -1772,10 +1835,15 @@ function XLGB_UI:UpdateSetScrollList()
 
   reanchorSetScrollList()
   local totalSetItems = ui.set.totalSetItemsRow.text
+  local totalSetsLabel = ui.set.totalSetItemsRow.totalSets
   local scrollData = ZO_ScrollList_GetDataList(s.scrollList)
   ZO_ScrollList_Clear(s.scrollList)
-  totalSetItems:SetText(string.format(XLGB_GetString("SET_TOTAL_ITEMS"), 0))
-  if XLGB_GearSet:GetNumberOfGearSets() > 0 and sV.displayingSet and sV.displayingSet > 0 then
+  local totalSets = XLGB_GearSet:GetNumberOfGearSets()
+  if totalSetsLabel then
+    totalSetsLabel:SetText(string.format(XLGB_GetString("SET_TOTAL_SETS"), totalSets))
+  end
+  local itemCount = 0
+  if totalSets > 0 and sV.displayingSet and sV.displayingSet > 0 then
     local gearSet = XLGB_GearSet:GetGearSet(sV.displayingSet)
     if gearSet and gearSet.items then
       for _, item in pairs(gearSet.items) do
@@ -1789,8 +1857,7 @@ function XLGB_UI:UpdateSetScrollList()
         )
         table.insert(scrollData, dataEntry)
       end
-      totalSetItems:SetText(string.format(XLGB_GetString("SET_TOTAL_ITEMS"), #gearSet.items))
-
+      itemCount = #gearSet.items
       if (#scrollData < 1) and not xl.isSetEditable then
         s.empty:SetHidden(false)
       else
@@ -1802,6 +1869,8 @@ function XLGB_UI:UpdateSetScrollList()
   else
     s.empty:SetHidden(false)
   end
+
+  totalSetItems:SetText(string.format(XLGB_GetString("SET_TOTAL_ITEMS_COUNT"), itemCount))
 
   if s.empty and s.empty:GetNamedChild("_Label") then
     s.empty:GetNamedChild("_Label"):SetText(XLGB_GetString("SET_EMPTY"))
@@ -1854,9 +1923,7 @@ function XLGB_UI:ShowSetUI()
       XLGB_UI:UpdateBankSetDropdown()
     end
     reanchorSetScrollList()
-    if s.scrollList then
-      ZO_ScrollList_RefreshVisible(s.scrollList)
-    end
+    XLGB_UI:UpdateSetScrollList()
   end
 end
 
@@ -1914,6 +1981,26 @@ local function InitUISetVariables()
 
   ui.set.titleRow = XLGB_SetWindow_TitleRow
   ui.set.titleRow.title = XLGB_SetWindow_TitleRow_Title
+  ui.set.titleRow.hide = XLGB_SetWindow_TitleRow_Hide
+  ui.set.titleRow.settings = XLGB_SetWindow_TitleRow_Settings
+  ui.set.titleRow.wardrobe = XLGB_SetWindow_TitleRow_Wardrobe
+  ui.set.titleRow.pages = XLGB_SetWindow_TitleRow_Pages
+
+  if ui.set.titleRow.title then
+    ui.set.titleRow.title:SetText(XLGB_GetString("TITLE_SET"))
+  end
+
+  if ui.set.titleRow.wardrobe then
+    if not WizardsWardrobe then
+      ui.set.titleRow.wardrobe:SetHidden(true)
+      if ui.set.titleRow.pages and ui.set.titleRow.settings then
+        ui.set.titleRow.pages:ClearAnchors()
+        ui.set.titleRow.pages:SetAnchor(TOPRIGHT, ui.set.titleRow.settings, TOPLEFT, -10, 1)
+      end
+    else
+      ui.set.titleRow.wardrobe:SetHidden(false)
+    end
+  end
 
   ui.set.setRow = XLGB_SetWindow_SetRow
   ui.set.setRow.edit = XLGB_SetWindow_SetRow_EditSet
@@ -1935,6 +2022,7 @@ local function InitUISetVariables()
 
   ui.set.totalSetItemsRow = XLGB_SetWindow_TotalSetItemsRow
   ui.set.totalSetItemsRow.text = XLGB_SetWindow_TotalSetItemsRow_TotalSetItems
+  ui.set.totalSetItemsRow.totalSets = XLGB_SetWindow_TotalSetItemsRow_TotalSets
 
   ui.set.bankRow = XLGB_SetWindow_BankRow
   ui.set.bankRow.deposit = XLGB_SetWindow_BankRow_DepositSet
@@ -1943,10 +2031,10 @@ local function InitUISetVariables()
   ui.set.bankRow.depositQuality = XLGB_SetWindow_BankRow_DepositQuality
 
   if ui.set.bankRow.deposit and ui.set.bankRow.deposit:GetNamedChild("_Label") then
-    ui.set.bankRow.deposit:GetNamedChild("_Label"):SetText(XLGB_GetString("PAGE_DEPOSIT"))
+    ui.set.bankRow.deposit:GetNamedChild("_Label"):SetText(XLGB_GetString("SET_DEPOSIT"))
   end
   if ui.set.bankRow.withdraw and ui.set.bankRow.withdraw:GetNamedChild("_Label") then
-    ui.set.bankRow.withdraw:GetNamedChild("_Label"):SetText(XLGB_GetString("PAGE_WITHDRAW"))
+    ui.set.bankRow.withdraw:GetNamedChild("_Label"):SetText(XLGB_GetString("SET_WITHDRAW"))
   end
   if ui.set.addItemsRow.addEquipped and ui.set.addItemsRow.addEquipped:GetNamedChild("_Label") then
     ui.set.addItemsRow.addEquipped:GetNamedChild("_Label"):SetText(XLGB_GetString("SET_ADD_EQUIPPED"))
@@ -2729,7 +2817,10 @@ function XLGB_UI:PopulateWardrobeSelectors(preferredCharId)
       label,
       function()
         XLGB_Wardrobe.selectedCharId = c.id
-        XLGB_UI:PopulateWardrobeZones(c.id, c.lastZoneTag)
+        XLGB_Wardrobe.selectedPageId = nil
+        -- Conserve la zone/raid actuellement visualisée si possible, sinon celle du perso, sinon "GEN"
+        local preferredZone = XLGB_Wardrobe.selectedZoneTag or c.lastZoneTag or "GEN"
+        XLGB_UI:PopulateWardrobeZones(c.id, preferredZone)
       end
     )
     entry.charData = c
@@ -2760,8 +2851,17 @@ function XLGB_UI:PopulateWardrobeZones(charId, preferredZoneTag)
   end
 
   local selectedZoneIndex = 1
+  local foundPreferred = false
+  local firstWithSetups = nil
+
   for idx, z in ipairs(zones) do
     local label = z.name
+    if z.setupCount and z.setupCount > 0 then
+      label = label .. " |c888888(" .. z.setupCount .. ")|r"
+      if not firstWithSetups and z.tag ~= "GEN" then
+        firstWithSetups = idx
+      end
+    end
     if z.icon and z.icon ~= "" then
       label = "|t20:20:" .. z.icon .. "|t " .. label
     end
@@ -2770,6 +2870,7 @@ function XLGB_UI:PopulateWardrobeZones(charId, preferredZoneTag)
       label,
       function()
         XLGB_Wardrobe.selectedZoneTag = z.tag
+        XLGB_Wardrobe.selectedPageId = nil
         XLGB_UI:PopulateWardrobePages(charId, z.tag)
       end
     )
@@ -2778,7 +2879,13 @@ function XLGB_UI:PopulateWardrobeZones(charId, preferredZoneTag)
 
     if preferredZoneTag and z.tag == preferredZoneTag then
       selectedZoneIndex = idx
+      foundPreferred = true
     end
+  end
+
+  -- Si preferredZoneTag n'a pas été trouvé ou était "GEN", mais que le perso a un raid avec des setups, on privilégie ce raid
+  if not foundPreferred and firstWithSetups and (not preferredZoneTag or preferredZoneTag == "GEN") then
+    selectedZoneIndex = firstWithSetups
   end
 
   zoneDD:SelectItemByIndex(selectedZoneIndex)
@@ -2790,11 +2897,14 @@ function XLGB_UI:PopulateWardrobePages(charId, zoneTag)
   if not pageDD then return end
   pageDD:ClearItems()
 
-  local pages = XLGB_Wardrobe:GetPages(charId, zoneTag)
+  local pages, activePageId = XLGB_Wardrobe:GetPages(charId, zoneTag)
   if #pages == 0 then
     pageDD:SetSelectedItemText(XLGB_GetString("WW_NO_PAGES"))
     return
   end
+
+  local selectedPageIndex = 1
+  local preferredPageId = XLGB_Wardrobe.selectedPageId or activePageId or 1
 
   for idx, p in ipairs(pages) do
     local entry = pageDD:CreateItemEntry(
@@ -2806,9 +2916,13 @@ function XLGB_UI:PopulateWardrobePages(charId, zoneTag)
     )
     entry.pageData = p
     pageDD:AddItem(entry, ZO_COMBOBOX_SUPRESS_UPDATE)
+
+    if preferredPageId and p.id == preferredPageId then
+      selectedPageIndex = idx
+    end
   end
 
-  pageDD:SelectItemByIndex(1)
+  pageDD:SelectItemByIndex(selectedPageIndex)
 end
 
 function XLGB_UI:SelectWardrobeTab(tabIndex)
@@ -3078,8 +3192,8 @@ local function InitUIWardrobeVariables()
   ui.wardrobe.actionRow.prepare = XLGB_WardrobeWindow_ActionRow_Prepare
   ui.wardrobe.actionRow.importBtn = XLGB_WardrobeWindow_ActionRow_Import
 
-  if ui.page and ui.page.titleRow then
-    ui.page.titleRow.wardrobe = XLGB_PageWindow_TitleRow_Wardrobe
+  if ui.set and ui.set.titleRow then
+    ui.set.titleRow.wardrobe = XLGB_SetWindow_TitleRow_Wardrobe
   end
 
   if ui.wardrobe.titleRow and ui.wardrobe.titleRow.title then
@@ -3112,10 +3226,22 @@ local function InitUIWardrobeVariables()
     local withLabel = ui.wardrobe.actionRow.withdrawPage and ui.wardrobe.actionRow.withdrawPage:GetNamedChild("_Label")
     local prepLabel = ui.wardrobe.actionRow.prepare and ui.wardrobe.actionRow.prepare:GetNamedChild("_Label")
     local impLabel = ui.wardrobe.actionRow.importBtn and ui.wardrobe.actionRow.importBtn:GetNamedChild("_Label")
-    if depLabel then depLabel:SetText(XLGB_GetString("WW_BTN_DEPOSIT")) end
-    if withLabel then withLabel:SetText(XLGB_GetString("WW_BTN_WITHDRAW")) end
-    if prepLabel then prepLabel:SetText(XLGB_GetString("WW_BTN_PREPARE")) end
-    if impLabel then impLabel:SetText(XLGB_GetString("WW_BTN_IMPORT")) end
+    if depLabel then
+      depLabel:SetFont("ZoFontWinH4")
+      depLabel:SetText(XLGB_GetString("WW_BTN_DEPOSIT"))
+    end
+    if withLabel then
+      withLabel:SetFont("ZoFontWinH4")
+      withLabel:SetText(XLGB_GetString("WW_BTN_WITHDRAW"))
+    end
+    if prepLabel then
+      prepLabel:SetFont("ZoFontWinH4")
+      prepLabel:SetText(XLGB_GetString("WW_BTN_PREPARE"))
+    end
+    if impLabel then
+      impLabel:SetFont("ZoFontWinH4")
+      impLabel:SetText(XLGB_GetString("WW_BTN_IMPORT"))
+    end
   end
 
   CreatePageTooltip(ui.wardrobe.titleRow.refresh, XLGB_GetString("WW_TOOLTIP_REFRESH"))

@@ -37,6 +37,23 @@ local DEFAULT_ZONE_NAMES = {
   OC = "Osinium / Divers",
 }
 
+local DEFAULT_TRIAL_TAGS = {
+  AA = true, HRC = true, SO = true, MOL = true, HOF = true,
+  AS = true, CR = true, SS = true, KA = true, RG = true,
+  DSR = true, SE = true, LC = true,
+}
+
+local DEFAULT_ARENA_TAGS = {
+  BRP = true, DSA = true, MA = true, VH = true, IA = true, EA = true,
+}
+
+local ALWAYS_AVAILABLE_ZONES = {
+  "GEN",
+  "AA", "HRC", "SO", "MOL", "HOF", "AS", "CR", "SS", "KA", "RG", "DSR", "SE", "LC",
+  "BRP", "DSA", "MA", "VH", "IA",
+  "SUB", "PVP",
+}
+
 function WWB:Initialize()
   self.selectedCharId = nil
   self.selectedZoneTag = nil
@@ -54,6 +71,38 @@ end
 function WWB:IsWWAvailable()
   local sv = self:GetWWSavedVariables()
   return sv ~= nil
+end
+
+-- Resolves actual character storage, handling linked characters and $AccountWide in Wizard's Wardrobe
+function WWB:GetCharacterStorage(characterId)
+  local wwData = self:GetWWSavedVariables()
+  if not wwData or not characterId then return nil, nil end
+
+  local charKey = tostring(characterId)
+  local currentCharId = nil
+  if GetCurrentCharacterId then
+    currentCharId = tostring(Id64ToString(GetCurrentCharacterId()))
+  end
+
+  local isCurrent = (currentCharId and charKey == currentCharId) or
+                    (WizardsWardrobe and WizardsWardrobe.currentCharacterId and charKey == tostring(WizardsWardrobe.currentCharacterId))
+
+  if isCurrent and WizardsWardrobe and WizardsWardrobe.storage then
+    return WizardsWardrobe.storage, WizardsWardrobe.storage
+  end
+
+  local charData = wwData[charKey] or wwData[characterId] or wwData[tonumber(characterId)]
+  if not charData then return nil, nil end
+
+  -- Resolve $AccountWide if applicable (do not cross-redirect individual characters)
+  local selCharId = charData.selectedCharacterId
+  if selCharId and selCharId == "$AccountWide" then
+    if wwData["$AccountWide"] and wwData["$AccountWide"].accountWideStorage then
+      return wwData["$AccountWide"].accountWideStorage, charData
+    end
+  end
+
+  return charData, charData
 end
 
 function WWB:GetCharacters()
@@ -86,9 +135,10 @@ function WWB:GetCharacters()
         name = XLGB_GetString("WW_CHAR") .. " " .. charIdStr
       end
 
+      local storage = self:GetCharacterStorage(charKey)
       local setupCount = 0
-      if charData.setups then
-        for _, zoneSetups in pairs(charData.setups) do
+      if storage and storage.setups then
+        for _, zoneSetups in pairs(storage.setups) do
           for _, pageSetups in pairs(zoneSetups) do
             if type(pageSetups) == "table" then
               setupCount = setupCount + #pageSetups
@@ -106,9 +156,24 @@ function WWB:GetCharacters()
         isCurrent = true
       end
 
-      local lastZoneTag = "GEN"
-      if charData.selectedZoneTag then
-        lastZoneTag = charData.selectedZoneTag[charKey] or charData.selectedZoneTag[charIdStr] or charData.selectedZoneTag[tonumber(charKey)] or "GEN"
+      -- Resolve lastZoneTag:
+      -- Check active WW selection, WW in-memory storage, active character's SavedVariables, or charData
+      local lastZoneTag = nil
+      local WW = WizardsWardrobe
+      if isCurrent and WW and WW.selection and WW.selection.zone and WW.selection.zone.tag then
+        lastZoneTag = WW.selection.zone.tag
+      end
+      if (not lastZoneTag or lastZoneTag == "") and WW and WW.storage and WW.storage.selectedZoneTag then
+        lastZoneTag = WW.storage.selectedZoneTag[charKey] or WW.storage.selectedZoneTag[charIdStr] or WW.storage.selectedZoneTag[tonumber(charKey)]
+      end
+      if (not lastZoneTag or lastZoneTag == "") and currentCharId and wwData[currentCharId] and wwData[currentCharId].selectedZoneTag then
+        lastZoneTag = wwData[currentCharId].selectedZoneTag[charKey] or wwData[currentCharId].selectedZoneTag[charIdStr] or wwData[currentCharId].selectedZoneTag[tonumber(charKey)]
+      end
+      if (not lastZoneTag or lastZoneTag == "") and charData.selectedZoneTag then
+        lastZoneTag = charData.selectedZoneTag[charKey] or charData.selectedZoneTag[charIdStr] or charData.selectedZoneTag[tonumber(charKey)]
+      end
+      if not lastZoneTag or lastZoneTag == "" then
+        lastZoneTag = "GEN"
       end
 
       table.insert(chars, {
@@ -159,12 +224,7 @@ function WWB:GetCharacterName(characterId)
 end
 
 function WWB:GetZones(characterId)
-  local wwData = self:GetWWSavedVariables()
-  if not wwData or not characterId then return {} end
-
-  local charKey = tostring(characterId)
-  local charData = wwData[charKey] or wwData[characterId]
-  if not charData then return {} end
+  local storage, charData = self:GetCharacterStorage(characterId)
 
   local zones = {}
   local seenZones = {}
@@ -175,9 +235,16 @@ function WWB:GetZones(characterId)
 
     local name = nil
     local icon = nil
-    if WizardsWardrobe and WizardsWardrobe.zones and WizardsWardrobe.zones[tag] then
-      name = WizardsWardrobe.zones[tag].name
-      icon = WizardsWardrobe.zones[tag].icon
+    local category = 99
+    local priority = 99
+
+    local WW = WizardsWardrobe
+    if WW and WW.zones and WW.zones[tag] then
+      local z = WW.zones[tag]
+      name = z.name
+      icon = z.icon
+      category = z.category or 99
+      priority = z.priority or 99
     end
     if not name or name == "" then
       name = DEFAULT_ZONE_NAMES[tag] or tag
@@ -185,37 +252,85 @@ function WWB:GetZones(characterId)
     if not icon or icon == "" then
       icon = "/esoui/art/icons/achievement_u26_skyrim_trial_flavor_2.dds"
     end
+    if category == 99 then
+      if tag == "GEN" then
+        category = 1
+      elseif DEFAULT_TRIAL_TAGS[tag] then
+        category = 2
+      elseif DEFAULT_ARENA_TAGS[tag] then
+        category = 5
+      else
+        category = 10
+      end
+    end
+
+    local setupCount = 0
+    if storage and storage.setups and storage.setups[tag] then
+      for pageId, pageSetups in pairs(storage.setups[tag]) do
+        if type(pageSetups) == "table" then
+          for _, setup in ipairs(pageSetups) do
+            if setup and (setup.gear or setup.name) then
+              setupCount = setupCount + 1
+            end
+          end
+        end
+      end
+    end
 
     table.insert(zones, {
       tag = tag,
       name = name,
       icon = icon,
+      category = category,
+      priority = priority,
+      setupCount = setupCount,
     })
   end
 
-  if charData.setups then
-    for tag, pages in pairs(charData.setups) do
-      if type(pages) == "table" and next(pages) ~= nil then
+  -- 1. Always add standard Zones / Raids (General, all 13 Trials, Arenas, etc.)
+  for _, tag in ipairs(ALWAYS_AVAILABLE_ZONES) do
+    addZone(tag)
+  end
+
+  -- 2. Also add any registered Trials / Arenas from WizardsWardrobe.zones if available
+  local WW = WizardsWardrobe
+  if WW and WW.zones then
+    for tag, z in pairs(WW.zones) do
+      if z and (z.category == (WW.ACTIVITIES and WW.ACTIVITIES.TRIALS) or
+                z.category == (WW.ACTIVITIES and WW.ACTIVITIES.ARENAS) or
+                z.category == (WW.ACTIVITIES and WW.ACTIVITIES.GENERAL)) then
         addZone(tag)
       end
     end
   end
 
-  if charData.pages then
-    for tag, pages in pairs(charData.pages) do
-      if type(pages) == "table" then
-        addZone(tag)
+  -- 3. Add any other zones where this character has setups or pages (e.g. dungeons)
+  if storage then
+    if storage.setups then
+      for tag, pages in pairs(storage.setups) do
+        if type(pages) == "table" and next(pages) ~= nil then
+          addZone(tag)
+        end
+      end
+    end
+
+    if storage.pages then
+      for tag, pages in pairs(storage.pages) do
+        if type(pages) == "table" then
+          addZone(tag)
+        end
       end
     end
   end
 
-  if #zones == 0 then
-    addZone("GEN")
-  end
-
+  -- Sort: Category first (General -> Trials -> Arenas -> Dungeons/Misc), then Priority/Name
   table.sort(zones, function(a, b)
-    if a.tag == "GEN" then return true end
-    if b.tag == "GEN" then return false end
+    if a.category ~= b.category then
+      return a.category < b.category
+    end
+    if a.priority ~= b.priority then
+      return a.priority < b.priority
+    end
     return a.name < b.name
   end)
 
@@ -223,18 +338,19 @@ function WWB:GetZones(characterId)
 end
 
 function WWB:GetPages(characterId, zoneTag)
-  local wwData = self:GetWWSavedVariables()
-  if not wwData or not characterId or not zoneTag then return {} end
-
-  local charKey = tostring(characterId)
-  local charData = wwData[charKey] or wwData[characterId]
-  if not charData then return {} end
+  local storage = self:GetCharacterStorage(characterId)
+  if not storage or not zoneTag then return { { id = 1, name = "Page 1" } }, 1 end
 
   local pages = {}
   local seenPageIds = {}
+  local activePageId = 1
+  local charKey = tostring(characterId)
 
-  if charData.pages and charData.pages[zoneTag] then
-    for pageId, pageInfo in pairs(charData.pages[zoneTag]) do
+  if storage.pages and storage.pages[zoneTag] then
+    if storage.pages[zoneTag][0] then
+      activePageId = storage.pages[zoneTag][0][charKey] or storage.pages[zoneTag][0][tonumber(characterId)] or 1
+    end
+    for pageId, pageInfo in pairs(storage.pages[zoneTag]) do
       if pageId ~= 0 and type(pageId) == "number" then
         seenPageIds[pageId] = true
         local name = (pageInfo and pageInfo.name and pageInfo.name ~= "") and pageInfo.name or ("Page " .. tostring(pageId))
@@ -246,8 +362,8 @@ function WWB:GetPages(characterId, zoneTag)
     end
   end
 
-  if charData.setups and charData.setups[zoneTag] then
-    for pageId, setups in pairs(charData.setups[zoneTag]) do
+  if storage.setups and storage.setups[zoneTag] then
+    for pageId, setups in pairs(storage.setups[zoneTag]) do
       if type(pageId) == "number" and not seenPageIds[pageId] then
         seenPageIds[pageId] = true
         table.insert(pages, {
@@ -266,24 +382,18 @@ function WWB:GetPages(characterId, zoneTag)
     return a.id < b.id
   end)
 
-  return pages
+  return pages, activePageId
 end
 
 function WWB:GetPageGear(characterId, zoneTag, pageId)
-  local wwData = self:GetWWSavedVariables()
-  if not wwData or not characterId or not zoneTag or not pageId then
-    return {}, {}, { total = 0, worn = 0, bag = 0, bank = 0, missing = 0 }
-  end
-
-  local charKey = tostring(characterId)
-  local charData = wwData[charKey] or wwData[characterId]
-  if not charData then
+  local storage = self:GetCharacterStorage(characterId)
+  if not storage or not zoneTag or not pageId then
     return {}, {}, { total = 0, worn = 0, bag = 0, bank = 0, missing = 0 }
   end
 
   local neededGearMap = {}
-  local pageNum = tonumber(pageId)
-  local pageSetups = charData.setups and charData.setups[zoneTag] and (charData.setups[zoneTag][pageId] or (pageNum and charData.setups[zoneTag][pageNum]))
+  local pageNum = tonumber(pageId) or 1
+  local pageSetups = storage.setups and storage.setups[zoneTag] and (storage.setups[zoneTag][pageId] or (pageNum and storage.setups[zoneTag][pageNum]))
 
   if pageSetups then
     for setupIdx, setup in ipairs(pageSetups) do

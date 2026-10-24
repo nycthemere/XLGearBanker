@@ -3,15 +3,16 @@ XLGB_I18N = {}
 local strings = {
   ["en"] = {
     -- Window Titles
-    ["TITLE_PAGE"] = "XL Gear Banker",
-    ["TITLE_PAGE_EDIT"] = "XL Gear Banker (Edit)",
-    ["TITLE_SET"] = "XLGB - Sets",
-    ["TITLE_SET_EDIT"] = "XLGB - Sets (Edit Mode)",
+    ["TITLE_PAGE"] = "XLGB - Pages",
+    ["TITLE_PAGE_EDIT"] = "XLGB - Pages (Edit)",
+    ["TITLE_SET"] = "XL Gear Banker",
+    ["TITLE_SET_EDIT"] = "XL Gear Banker (Edit)",
     ["TITLE_WARDROBE"] = "XLGB - Wizard's Wardrobe",
     ["TITLE_MISSING"] = "XLGB - Missing Items",
 
     -- Page Window
     ["PAGE_EMPTY"] = "Page is empty.",
+    ["PAGE_TOTAL_SETS"] = "Total sets: %d",
     ["PAGE_TOTAL_ITEMS"] = "Total items*: %d",
     ["PAGE_WITHDRAW"] = "Withdraw Page",
     ["PAGE_DEPOSIT"] = "Deposit Page",
@@ -30,11 +31,18 @@ local strings = {
     ["PAGE_TOOLTIP_SET_EDITOR"] = "Toggle the Set Editor",
     ["PAGE_TOOLTIP_SETTINGS"] = "Settings",
     ["PAGE_TOOLTIP_TOGGLE_WARDROBE"] = "Toggle Wizard's Wardrobe",
+    ["PAGE_TOOLTIP_TOTAL_SETS"] = "Number of sets in this page",
     ["PAGE_MAY_CONTAIN_DUPLICATES"] = "(May contain duplicates)",
     ["PAGE_SETS_DELETED"] = "[XLGB] %d set(s) belonging to the page were deleted.",
 
     -- Sets Window
+    ["SET_WITHDRAW"] = "Withdraw Set",
+    ["SET_DEPOSIT"] = "Deposit Set",
+    ["SET_TOTAL_ITEMS_COUNT"] = "Total items: %d",
+    ["SET_TOTAL_SETS"] = "Total sets: %d",
     ["SET_TOTAL_ITEMS"] = "Total items in set: %d",
+    ["SET_TOOLTIP_TOGGLE_PAGES"] = "Toggle XLGB - Pages",
+    ["SET_TOOLTIP_TOTAL_SETS"] = "Total number of sets created in XLGB",
     ["SET_EMPTY"] = "Set is empty.",
     ["SET_ADD_EQUIPPED"] = "Add Equipped",
     ["SET_DELETE"] = "Delete Set",
@@ -228,8 +236,8 @@ local strings = {
 
     -- Settings
     ["SETTINGS_PANEL_TITLE"] = "XL Gear Banker",
-    ["SETTINGS_PAGE_ON_OPEN"] = "Show 'Page' window on bank open",
-    ["SETTINGS_SET_ON_OPEN"] = "Show 'Set' window on bank open",
+    ["SETTINGS_SET_ON_OPEN"] = "Show 'XL Gear Banker' (Sets) on bank open",
+    ["SETTINGS_PAGE_ON_OPEN"] = "Show 'XLGB - Pages' on bank open",
     ["SETTINGS_WW_ON_OPEN"] = "Show Wizard's Wardrobe window on bank open",
     ["SETTINGS_WW_ON_OPEN_DESC"] = "Automatically opens the Wizard's Wardrobe window when opening bank or banking assistant.",
     ["SETTINGS_MOVE_DELAY"] = "Item Move Delay (ms)",
@@ -290,15 +298,16 @@ local strings = {
 
   ["fr"] = {
     -- Window Titles
-    ["TITLE_PAGE"] = "XL Gear Banker",
-    ["TITLE_PAGE_EDIT"] = "XL Gear Banker (Édition)",
-    ["TITLE_SET"] = "XLGB - Sets",
-    ["TITLE_SET_EDIT"] = "XLGB - Sets (Mode Édition)",
+    ["TITLE_PAGE"] = "XLGB - Pages",
+    ["TITLE_PAGE_EDIT"] = "XLGB - Pages (Édition)",
+    ["TITLE_SET"] = "XL Gear Banker",
+    ["TITLE_SET_EDIT"] = "XL Gear Banker (Mode Édition)",
     ["TITLE_WARDROBE"] = "XLGB - Wizard's Wardrobe",
     ["TITLE_MISSING"] = "XLGB - Objets manquants",
 
     -- Page Window
     ["PAGE_EMPTY"] = "La page est vide.",
+    ["PAGE_TOTAL_SETS"] = "Total sets : %d",
     ["PAGE_TOTAL_ITEMS"] = "Objets au total* : %d",
     ["PAGE_WITHDRAW"] = "Retirer la page",
     ["PAGE_DEPOSIT"] = "Déposer la page",
@@ -317,11 +326,18 @@ local strings = {
     ["PAGE_TOOLTIP_SET_EDITOR"] = "Afficher/Masquer l'éditeur de set",
     ["PAGE_TOOLTIP_SETTINGS"] = "Paramètres",
     ["PAGE_TOOLTIP_TOGGLE_WARDROBE"] = "Afficher/Masquer Wizard's Wardrobe",
+    ["PAGE_TOOLTIP_TOTAL_SETS"] = "Nombre de sets dans cette page",
     ["PAGE_MAY_CONTAIN_DUPLICATES"] = "(Peut contenir des doublons)",
     ["PAGE_SETS_DELETED"] = "[XLGB] %d set(s) de la page supprimé(s).",
 
     -- Sets Window
+    ["SET_WITHDRAW"] = "Retirer le set",
+    ["SET_DEPOSIT"] = "Déposer le set",
+    ["SET_TOTAL_ITEMS_COUNT"] = "Total objets : %d",
+    ["SET_TOTAL_SETS"] = "Total sets : %d",
     ["SET_TOTAL_ITEMS"] = "Objets dans le set : %d",
+    ["SET_TOOLTIP_TOGGLE_PAGES"] = "Afficher/Masquer XLGB - Pages",
+    ["SET_TOOLTIP_TOTAL_SETS"] = "Nombre total de sets créés dans XLGB",
     ["SET_EMPTY"] = "Le set est vide.",
     ["SET_ADD_EQUIPPED"] = "Ajouter équipé",
     ["SET_DELETE"] = "Supprimer le set",
@@ -515,8 +531,8 @@ local strings = {
 
     -- Settings
     ["SETTINGS_PANEL_TITLE"] = "XL Gear Banker",
-    ["SETTINGS_PAGE_ON_OPEN"] = "Ouvrir la fenêtre Page à l'ouverture de la banque",
-    ["SETTINGS_SET_ON_OPEN"] = "Ouvrir la fenêtre Sets à l'ouverture de la banque",
+    ["SETTINGS_SET_ON_OPEN"] = "Ouvrir 'XL Gear Banker' (Sets) à l'ouverture de la banque",
+    ["SETTINGS_PAGE_ON_OPEN"] = "Ouvrir 'XLGB - Pages' à l'ouverture de la banque",
     ["SETTINGS_WW_ON_OPEN"] = "Ouvrir la fenêtre Wardrobe à l'ouverture de la banque",
     ["SETTINGS_WW_ON_OPEN_DESC"] = "Ouvre automatiquement la fenêtre Wizard's Wardrobe lors de l'interaction avec la banque ou l'assistant de banque.",
     ["SETTINGS_MOVE_DELAY"] = "Délai de déplacement (ms)",
@@ -577,15 +593,16 @@ local strings = {
 
   ["de"] = {
     -- Window Titles
-    ["TITLE_PAGE"] = "XL Gear Banker",
-    ["TITLE_PAGE_EDIT"] = "XL Gear Banker (Bearbeiten)",
-    ["TITLE_SET"] = "XLGB - Sets",
-    ["TITLE_SET_EDIT"] = "XLGB - Sets (Bearbeitungsmodus)",
+    ["TITLE_PAGE"] = "XLGB - Pages",
+    ["TITLE_PAGE_EDIT"] = "XLGB - Pages (Bearbeiten)",
+    ["TITLE_SET"] = "XL Gear Banker",
+    ["TITLE_SET_EDIT"] = "XL Gear Banker (Bearbeitungsmodus)",
     ["TITLE_WARDROBE"] = "XLGB - Wizard's Wardrobe",
     ["TITLE_MISSING"] = "XLGB - Fehlende Gegenstände",
 
     -- Page Window
     ["PAGE_EMPTY"] = "Seite ist leer.",
+    ["PAGE_TOTAL_SETS"] = "Sets gesamt: %d",
     ["PAGE_TOTAL_ITEMS"] = "Gesamtgegenstände*: %d",
     ["PAGE_WITHDRAW"] = "Seite entnehmen",
     ["PAGE_DEPOSIT"] = "Seite einlagern",
@@ -604,11 +621,18 @@ local strings = {
     ["PAGE_TOOLTIP_SET_EDITOR"] = "Set-Editor ein-/ausblenden",
     ["PAGE_TOOLTIP_SETTINGS"] = "Einstellungen",
     ["PAGE_TOOLTIP_TOGGLE_WARDROBE"] = "Wizard's Wardrobe ein-/ausblenden",
+    ["PAGE_TOOLTIP_TOTAL_SETS"] = "Anzahl der Sets auf dieser Seite",
     ["PAGE_MAY_CONTAIN_DUPLICATES"] = "(Kann Duplikate enthalten)",
     ["PAGE_SETS_DELETED"] = "[XLGB] %d Set(s) der Seite wurden gelöscht.",
 
     -- Sets Window
+    ["SET_WITHDRAW"] = "Set entnehmen",
+    ["SET_DEPOSIT"] = "Set einlagern",
+    ["SET_TOTAL_ITEMS_COUNT"] = "Gegenstände: %d",
+    ["SET_TOTAL_SETS"] = "Sets gesamt: %d",
     ["SET_TOTAL_ITEMS"] = "Gegenstände im Set: %d",
+    ["SET_TOOLTIP_TOGGLE_PAGES"] = "XLGB - Seiten ein-/ausblenden",
+    ["SET_TOOLTIP_TOTAL_SETS"] = "Gesamtzahl der in XLGB erstellten Sets",
     ["SET_EMPTY"] = "Set ist leer.",
     ["SET_ADD_EQUIPPED"] = "Ausrüstung hinzufügen",
     ["SET_DELETE"] = "Set löschen",
@@ -802,8 +826,8 @@ local strings = {
 
     -- Settings
     ["SETTINGS_PANEL_TITLE"] = "XL Gear Banker",
-    ["SETTINGS_PAGE_ON_OPEN"] = "Seitenfenster beim Öffnen der Bank anzeigen",
-    ["SETTINGS_SET_ON_OPEN"] = "Set-Fenster beim Öffnen der Bank anzeigen",
+    ["SETTINGS_SET_ON_OPEN"] = "'XL Gear Banker' (Sets) beim Öffnen der Bank anzeigen",
+    ["SETTINGS_PAGE_ON_OPEN"] = "'XLGB - Seiten' beim Öffnen der Bank anzeigen",
     ["SETTINGS_WW_ON_OPEN"] = "Wardrobe-Fenster beim Öffnen der Bank anzeigen",
     ["SETTINGS_WW_ON_OPEN_DESC"] = "Öffnet das Wizard's Wardrobe Fenster automatisch bei Interaktion mit der Bank oder dem Bankassistenten.",
     ["SETTINGS_MOVE_DELAY"] = "Verschiebeverzögerung (ms)",

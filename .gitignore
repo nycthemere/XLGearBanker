@@ -5,3 +5,6 @@ Desktop.ini
 *.bak
 *.tmp
 *.orig
+log.py
+.idea
+*.png
