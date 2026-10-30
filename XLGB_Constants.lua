@@ -25,7 +25,7 @@ end
 local C = {
     ADDON_NAME    = "XLGearBanker",
     ADDON_TITLE   = "XL Gear Banker",
-    ADDON_VERSION = "2026.10.24",
+    ADDON_VERSION = "2026.10.30-101046",
     AUTHOR        = "|c783f04nyc|r|c8fce00thé|r|c6a329fmère|r (original: @XL_Olsen)",
 
     COLORS = {

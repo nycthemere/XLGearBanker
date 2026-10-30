@@ -159,6 +159,8 @@ function XLGB_Page:DepositPage(pageName)
 
   XLGB_Banking.isMoveCancelled = false
   XLGB_Page.isMovingPage = true
+  XLGB_Page.itemsMovedInCurrentPage = 0
+  XLGB_Banking:SwitchToJunkTab()
   XLGB_Events:OnPageDepositStart(pageName)
   local time = GetGameTimeMilliseconds()
 
@@ -174,13 +176,21 @@ function XLGB_Page:DepositPage(pageName)
 
   local function _lastSetFinish()
     if XLGB_Banking.isMovingItems then return end
+    local durationSec = (GetGameTimeMilliseconds() - time) / 1000
+    local totalItems = XLGB_Page.itemsMovedInCurrentPage or 0
     if not XLGB_Banking.isMoveCancelled then
-      d("[XLGB] Page '" .. page.name .."' deposited in " .. tostring(string.format("%.2f", (GetGameTimeMilliseconds()-time)/1000)) .. " seconds.")
+      local formatItemCount = XLGB_Banking.FormatItemCount or function(c) return tostring(c) .. " items" end
+      local countStr = formatItemCount(totalItems)
+      local formatStr = (XLGB_GetString and XLGB_GetString("TRANSACTION_PAGE_DEPOSITED")) or "[XLGB] Page '%s' (%s) deposited in %.2f seconds."
+      d(string.format(formatStr, page.name, countStr, durationSec))
     else
-      d("[XLGB_ERROR] Deposit of page '" .. page.name .. "' got cancelled. (" ..tostring(string.format("%.2f", (GetGameTimeMilliseconds()-time)/1000)) .. " seconds.)")
+      local cancelStr = (XLGB_GetString and XLGB_GetString("TRANSACTION_PAGE_DEPOSIT_CANCELLED")) or "[XLGB_ERROR] Deposit of page '%s' got cancelled (%.2f seconds)."
+      d(string.format(cancelStr, page.name, durationSec))
     end
     XLGB_Page.isMovingPage = false
+    XLGB_Page.itemsMovedInCurrentPage = 0
     sV.safeMode = safeModeBefore
+    XLGB_Banking:RestoreInventoryTab(true)
     XLGB_Events:OnPageDepositStop(pageName)
     EVENT_MANAGER:UnregisterForUpdate(XLGearBanker.name .. "WaitLastSetFinish")
   end
@@ -208,6 +218,8 @@ function XLGB_Page:WithdrawPage(pageName)
 
   XLGB_Banking.isMoveCancelled = false
   XLGB_Page.isMovingPage = true
+  XLGB_Page.itemsMovedInCurrentPage = 0
+  XLGB_Banking:SwitchToJunkTab()
   XLGB_Events:OnPageWithdrawStart(pageName)
   local time = GetGameTimeMilliseconds()
 
@@ -223,13 +235,21 @@ function XLGB_Page:WithdrawPage(pageName)
 
   local function _lastSetFinish()
     if XLGB_Banking.isMovingItems then return end
+    local durationSec = (GetGameTimeMilliseconds() - time) / 1000
+    local totalItems = XLGB_Page.itemsMovedInCurrentPage or 0
     if not XLGB_Banking.isMoveCancelled then
-      d("[XLGB] Page '" .. page.name .."' withdrawn in " .. tostring(string.format("%.2f", (GetGameTimeMilliseconds()-time)/1000)) .. " seconds.")
+      local formatItemCount = XLGB_Banking.FormatItemCount or function(c) return tostring(c) .. " items" end
+      local countStr = formatItemCount(totalItems)
+      local formatStr = (XLGB_GetString and XLGB_GetString("TRANSACTION_PAGE_WITHDRAWN")) or "[XLGB] Page '%s' (%s) withdrawn in %.2f seconds."
+      d(string.format(formatStr, page.name, countStr, durationSec))
     else
-      d("[XLGB_ERROR] Withdrawing of page '" .. page.name .. "' got cancelled. (" ..tostring(string.format("%.2f", (GetGameTimeMilliseconds()-time)/1000)) .. " seconds.)")
+      local cancelStr = (XLGB_GetString and XLGB_GetString("TRANSACTION_PAGE_WITHDRAW_CANCELLED")) or "[XLGB_ERROR] Withdrawing of page '%s' got cancelled (%.2f seconds)."
+      d(string.format(cancelStr, page.name, durationSec))
     end
     XLGB_Page.isMovingPage = false
+    XLGB_Page.itemsMovedInCurrentPage = 0
     sV.safeMode = safeModeBefore
+    XLGB_Banking:RestoreInventoryTab(true)
     XLGB_Events:OnPageWithdrawStop(pageName)
     EVENT_MANAGER:UnregisterForUpdate(XLGearBanker.name .. "WaitLastSetFinish")
   end

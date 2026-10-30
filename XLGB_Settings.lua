@@ -133,13 +133,45 @@ function XLGB_Settings:Initialize()
     optionsTable,
     {
       type = "checkbox",
-      name = "Report missing items",
-      tooltip = "Shows a window report after withdraw/deposit with items that could not be found during withdraw/deposit.",
+      name = XLGB_GetString("SETTINGS_REPORT_MISSING"),
+      tooltip = XLGB_GetString("SETTINGS_REPORT_MISSING_DESC"),
       getFunc = function()
         return sV.reportMissing
       end,
       setFunc = function(v)
         sV.reportMissing = v
+      end,
+      width = "full"
+    }
+  )
+
+  table.insert(
+    optionsTable,
+    {
+      type = "checkbox",
+      name = XLGB_GetString("SETTINGS_FAST_TRANSFER_JUNK_TAB"),
+      tooltip = XLGB_GetString("SETTINGS_FAST_TRANSFER_JUNK_TAB_DESC"),
+      getFunc = function()
+        return sV.fastTransferJunkTab
+      end,
+      setFunc = function(v)
+        sV.fastTransferJunkTab = v
+      end,
+      width = "full"
+    }
+  )
+
+  table.insert(
+    optionsTable,
+    {
+      type = "checkbox",
+      name = XLGB_GetString("SETTINGS_ENABLE_ITEM_CONTEXT_MENU"),
+      tooltip = XLGB_GetString("SETTINGS_ENABLE_ITEM_CONTEXT_MENU_DESC"),
+      getFunc = function()
+        return sV.enableItemContextMenu == true
+      end,
+      setFunc = function(v)
+        sV.enableItemContextMenu = v
       end,
       width = "full"
     }

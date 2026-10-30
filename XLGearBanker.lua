@@ -36,6 +36,8 @@ XLGearBanker.savedVariables = {
   setDepositQualities = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true },
   wardrobeWithdrawQualities = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true },
   wardrobeDepositQualities = { [1] = true, [2] = true, [3] = true, [4] = true, [5] = true },
+  fastTransferJunkTab = true,
+  enableItemContextMenu = false,
   quickSetTargetName = "",
   quickSetChoices = {},
   quickSetUndoStack = {}
@@ -43,6 +45,7 @@ XLGearBanker.savedVariables = {
 
 function XLGearBanker.OnAddOnLoaded(event, addonName)
   if addonName == XLGearBanker.name then
+    EVENT_MANAGER:UnregisterForEvent(XLGearBanker.name, EVENT_ADD_ON_LOADED)
     XLGB_Constants:Initialize()
     XLGearBanker:Initialize()
     XLGB_GearSet:Initialize()
@@ -107,6 +110,12 @@ function XLGearBanker:Initialize()
   sV.setDepositQualities = ensureQualityTable(sV.setDepositQualities, sV.depositQualities)
   sV.wardrobeWithdrawQualities = ensureQualityTable(sV.wardrobeWithdrawQualities, sV.withdrawQualities)
   sV.wardrobeDepositQualities = ensureQualityTable(sV.wardrobeDepositQualities, sV.depositQualities)
+  if sV.fastTransferJunkTab == nil then
+    sV.fastTransferJunkTab = true
+  end
+  if sV.enableItemContextMenu == nil then
+    sV.enableItemContextMenu = false
+  end
   if sV.quickSetTargetName == nil then
     sV.quickSetTargetName = ""
   end

@@ -12,8 +12,8 @@ XLGB_Wardrobe = {}
 local WWB = XLGB_Wardrobe
 
 local DEFAULT_ZONE_NAMES = {
-  GEN = "Général",
-  SUB = "Substituts",
+  GEN = "General",
+  SUB = "Substitutes",
   PVP = "PvP",
   AA = "Aetherian Archive",
   HRC = "Hel Ra Citadel",
@@ -34,8 +34,19 @@ local DEFAULT_ZONE_NAMES = {
   DSA = "Dragonstar Arena",
   MA = "Maelstrom Arena",
   VH = "Vateshran Hollows",
-  OC = "Osinium / Divers",
+  OC = "Orsinium / Other",
 }
+
+local function getFallbackZoneName(tag)
+  if tag == "GEN" then
+    return (XLGB_GetString and XLGB_GetString("WW_ZONE_GENERAL")) or "General"
+  elseif tag == "SUB" then
+    return (XLGB_GetString and XLGB_GetString("WW_ZONE_SUBSTITUTES")) or "Substitutes"
+  elseif tag == "OC" then
+    return "Orsinium / " .. ((XLGB_GetString and XLGB_GetString("WW_ZONE_OTHER")) or "Other")
+  end
+  return DEFAULT_ZONE_NAMES[tag] or tag
+end
 
 local DEFAULT_TRIAL_TAGS = {
   AA = true, HRC = true, SO = true, MOL = true, HOF = true,
@@ -247,7 +258,7 @@ function WWB:GetZones(characterId)
       priority = z.priority or 99
     end
     if not name or name == "" then
-      name = DEFAULT_ZONE_NAMES[tag] or tag
+      name = getFallbackZoneName(tag)
     end
     if not icon or icon == "" then
       icon = "/esoui/art/icons/achievement_u26_skyrim_trial_flavor_2.dds"
@@ -667,10 +678,17 @@ function WWB:PrepareInventory(characterId, zoneTag, pageId, callback)
     return true
   end
 
+  local opWithdraw = (XLGB_GetString and XLGB_GetString("WW_OP_PAGE_WITHDRAW")) or "WW Page (withdraw)"
+  local opSurplus = (XLGB_GetString and XLGB_GetString("WW_OP_PAGE_SURPLUS")) or "WW Page (surplus)"
+
   if #bankItems > 0 then
+    self.isPreparingPage = true
+    XLGB_Banking:SwitchToJunkTab()
     d(XLGB_GetString("WW_WITHDRAW_MSG", #bankItems))
-    XLGB_Banking:WithdrawItemList(bankItems, "WW Page (retrait)", function(withdrawn)
+    XLGB_Banking:WithdrawItemList(bankItems, opWithdraw, function(withdrawn)
       if not withdrawn then
+        self.isPreparingPage = false
+        XLGB_Banking:RestoreInventoryTab(true)
         if callback then callback(false) end
         return
       end
@@ -679,7 +697,9 @@ function WWB:PrepareInventory(characterId, zoneTag, pageId, callback)
         local updatedDiff = WWB:GetDifferenceItems(characterId, zoneTag, pageId, diffFilter)
         if #updatedDiff > 0 then
           d(XLGB_GetString("WW_DEPOSIT_MSG", #updatedDiff))
-          XLGB_Banking:DepositItemList(updatedDiff, "WW Page (surplus)", true, function(deposited)
+          XLGB_Banking:DepositItemList(updatedDiff, opSurplus, true, function(deposited)
+            self.isPreparingPage = false
+            XLGB_Banking:RestoreInventoryTab(true)
             if XLGB_UI then XLGB_UI:UpdateWardrobeUI() end
             if deposited then
               d(XLGB_GetString("WW_PREPARE_SUCCESS"))
@@ -687,6 +707,8 @@ function WWB:PrepareInventory(characterId, zoneTag, pageId, callback)
             if callback then callback(deposited) end
           end, diffFilter)
         else
+          self.isPreparingPage = false
+          XLGB_Banking:RestoreInventoryTab(true)
           if XLGB_UI then XLGB_UI:UpdateWardrobeUI() end
           d(XLGB_GetString("WW_PREPARE_SUCCESS"))
           if callback then callback(true) end
@@ -694,8 +716,12 @@ function WWB:PrepareInventory(characterId, zoneTag, pageId, callback)
       end, 400)
     end, withFilter)
   else
+    self.isPreparingPage = true
+    XLGB_Banking:SwitchToJunkTab()
     d(XLGB_GetString("WW_DEPOSIT_MSG", #diffItems))
-    XLGB_Banking:DepositItemList(diffItems, "WW Page (surplus)", true, function(deposited)
+    XLGB_Banking:DepositItemList(diffItems, opSurplus, true, function(deposited)
+      self.isPreparingPage = false
+      XLGB_Banking:RestoreInventoryTab(true)
       if XLGB_UI then XLGB_UI:UpdateWardrobeUI() end
       if deposited then
         d(XLGB_GetString("WW_PREPARE_SUCCESS"))
@@ -737,7 +763,8 @@ function WWB:ImportAsXLGBPage(characterId, zoneTag, pageId)
     local isolatedName = XLGB_GetString("WW_ISOLATED_PIECES")
     local noSetName = XLGB_GetString("SET_LABEL_NO_SET")
     if setGroup.setName == isolatedName or setGroup.setName == noSetName or setGroup.setName == "Pièces isolées / Mythiques" or setGroup.setName == "Sans set" then
-      targetSetName = "[WW] " .. charName .. " - " .. pageName .. " (Divers)"
+      local otherLabel = (XLGB_GetString and XLGB_GetString("WW_ZONE_OTHER")) or "Other"
+      targetSetName = "[WW] " .. charName .. " - " .. pageName .. " (" .. otherLabel .. ")"
     else
       targetSetName = "[WW] " .. charName .. " - " .. pageName .. " - " .. setGroup.setName
     end

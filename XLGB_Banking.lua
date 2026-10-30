@@ -16,8 +16,8 @@ local XLGB = XLGB_Constants
 
 function XLGB_Banking.OnBankOpenEvent(event, bankBag)
   if not XLGB_Banking.bankOpen then
-    XLGB_Banking.bankOpen = IsBankOpen()
-    XLGB_Banking.currentBankBag = bankBag
+    XLGB_Banking.bankOpen = true
+    XLGB_Banking.currentBankBag = bankBag or GetBankingBag()
     XLGB_UI:OnBankOpen()
     KEYBIND_STRIP:AddKeybindButtonGroup(XLGB_Banking.bankButtonGroup)
     easyDebug("Bank open!")
@@ -25,15 +25,102 @@ function XLGB_Banking.OnBankOpenEvent(event, bankBag)
 end
 
 function XLGB_Banking.OnBankCloseEvent(event)
-  if XLGB_Banking.bankOpen then
-    XLGB_Banking.bankOpen = IsBankOpen()
-    XLGB_Banking.currentBankBag = XLGB.NO_BAG
-    XLGB_Banking.isMoveCancelled = true
-    XLGB_UI:OnBankClosed()
-    KEYBIND_STRIP:RemoveKeybindButtonGroup(XLGB_Banking.bankButtonGroup)
-    easyDebug("Bank closed")
+  XLGB_Banking.bankOpen = false
+  XLGB_Banking.currentBankBag = XLGB.NO_BAG
+  XLGB_Banking.isMoveCancelled = true
+  XLGB_Banking:RestoreInventoryTab(true)
+  XLGB_UI:OnBankClosed()
+  KEYBIND_STRIP:RemoveKeybindButtonGroup(XLGB_Banking.bankButtonGroup)
+  easyDebug("Bank closed")
+end
+
+--------------------------------------------------------------------------------------------
+-- JUNK TAB FAST TRANSFER HELPERS
+--------------------------------------------------------------------------------------------
+local function switchMenuBarToJunk(menuBar, savedMap)
+  if not menuBar or not menuBar.m_object then return false end
+
+  local currentDesc = ZO_MenuBar_GetSelectedDescriptor(menuBar)
+  if currentDesc == ITEM_TYPE_DISPLAY_CATEGORY_JUNK then return false end
+
+  local buttonObject = menuBar.m_object:ButtonObjectForDescriptor(ITEM_TYPE_DISPLAY_CATEGORY_JUNK)
+  if not buttonObject then return false end
+
+  if savedMap[menuBar] == nil then
+    savedMap[menuBar] = currentDesc
+  end
+
+  buttonObject.m_buttonData.ignoreVisibleCheck = true
+  return ZO_MenuBar_SelectDescriptor(menuBar, ITEM_TYPE_DISPLAY_CATEGORY_JUNK, true)
+end
+
+local function restoreMenuBar(menuBar, savedDesc)
+  if not menuBar or not menuBar.m_object or savedDesc == nil then return false end
+
+  local buttonObject = menuBar.m_object:ButtonObjectForDescriptor(ITEM_TYPE_DISPLAY_CATEGORY_JUNK)
+  if buttonObject then
+    buttonObject.m_buttonData.ignoreVisibleCheck = nil
+  end
+
+  return ZO_MenuBar_SelectDescriptor(menuBar, savedDesc, true)
+end
+
+local function getActiveMenuBars()
+  local bars = { ZO_PlayerInventoryTabs }
+  if ZO_PlayerBankTabs and not ZO_PlayerBankTabs:IsHidden() then
+    table.insert(bars, ZO_PlayerBankTabs)
+  elseif ZO_HouseBankTabs and not ZO_HouseBankTabs:IsHidden() then
+    table.insert(bars, ZO_HouseBankTabs)
+  elseif ZO_GuildBankTabs and not ZO_GuildBankTabs:IsHidden() then
+    table.insert(bars, ZO_GuildBankTabs)
+  end
+  return bars
+end
+
+function XLGB_Banking:SwitchToJunkTab()
+  if not sV or sV.fastTransferJunkTab == false then return end
+  if not (XLGB_Banking.bankOpen or IsBankOpen()) then return end
+  if self.isSwitchedToJunk then return end
+
+  if not self.savedInventoryTabs then
+    self.savedInventoryTabs = {}
+  end
+
+  local bars = getActiveMenuBars()
+  local anySwitched = false
+  for _, bar in ipairs(bars) do
+    if switchMenuBarToJunk(bar, self.savedInventoryTabs) then
+      anySwitched = true
+    end
+  end
+
+  if anySwitched or (self.savedInventoryTabs and next(self.savedInventoryTabs) ~= nil) then
+    self.isSwitchedToJunk = true
+    easyDebug("Fast transfer: switched inventory tabs to Junk")
   end
 end
+
+function XLGB_Banking:RestoreInventoryTab(force)
+  if not self.isSwitchedToJunk and not (self.savedInventoryTabs and next(self.savedInventoryTabs)) then return end
+
+  -- If not forced, verify that no other related operations are still in progress
+  if not force then
+    if XLGB_Banking.isMovingItems then return end
+    if XLGB_Page and XLGB_Page.isMovingPage then return end
+    if XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage then return end
+  end
+
+  local saved = self.savedInventoryTabs or {}
+  self.savedInventoryTabs = {}
+  self.isSwitchedToJunk = false
+
+  for bar, savedDesc in pairs(saved) do
+    restoreMenuBar(bar, savedDesc)
+  end
+
+  easyDebug("Fast transfer: restored inventory tabs")
+end
+--------------------------------------------------------------------------------------------
 
 local function findItemIndexInBag(bag, itemID)
   local item_index = XLGB.ITEM_NOT_IN_BAG
@@ -184,6 +271,12 @@ local function stopMovingItems()
     sV.safeMode = XLGB_Banking.safeModeBefore
   end
 
+  if XLGB_Banking.isMoveCancelled then
+    if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+      XLGB_Banking:RestoreInventoryTab(true)
+    end
+  end
+
 end
 
 local function onMoveFailed(sourceBag, failedAtItemIndex, targetBag, spaceFailedToMoveInto)
@@ -256,6 +349,8 @@ local function moveGear(sourceBag, itemsToMove, targetBag, availableBagSpaces)
   local nextIndex = 1
   local safeModeBefore = sV.safeMode
 
+  XLGB_Banking:SwitchToJunkTab()
+
   local function _onTargetBagItemReceived(eventCode, bagId, slotIndex, isNewItem, itemSoundCategory, updateReason, stackCountChange)
     -- d("Received item!")
     if XLGB_Banking.isMoveCancelled then
@@ -290,6 +385,8 @@ local function moveGearFromTwoBags(sourceBagOne, itemsToMoveOne, sourceBagTwo, i
   local itemsToMove = itemsToMoveOne
   local availableSpaceOffset = 0
   local safeModeBefore = sV.safeMode
+
+  XLGB_Banking:SwitchToJunkTab()
 
   local function _onTargetBagItemReceived(eventCode, bagId, slotIndex, isNewItem, itemSoundCategory, updateReason, stackCountChange)
     -- d("Received item number " .. tostring(nextIndex-1))
@@ -347,6 +444,9 @@ local function _onNotEnoughSpace(itemsToMove, availableSpaces)
   ZO_Dialog1Button1:SetAnchor(TOPRIGHT, ZO_Dialog1Button2, TOPLEFT, 120, 0)
 
   XLGB_Banking.isMoveCancelled = true
+  if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+    XLGB_Banking:RestoreInventoryTab(true)
+  end
 end
 
 --------------------------------------------------------------------------------------------
@@ -382,7 +482,7 @@ local function withdrawGearESOPlus(gearSet, qualityFilter)
       BAG_BANK, regularBankItemsToMove,
       BAG_SUBSCRIBER_BANK, ESOPlusItemsToMove,
       BAG_BACKPACK, availableBagSpaces)
-  return true
+  return true, numberOfItemsToMove
 end
 
 local function withdrawItemsNonESOPlus(itemsToWithdraw, qualityFilter)
@@ -402,38 +502,52 @@ local function withdrawItemsNonESOPlus(itemsToWithdraw, qualityFilter)
     sV.safeMode = true
   end
   moveGear(XLGB_Banking.currentBankBag, itemsToMove, BAG_BACKPACK, availableBagSpaces)
-  return true
+  return true, numberOfItemsToMove
 end
 
-local function waitForMoveItemEnd(startTime, setName, isWithdrawing, callback, isItemList)
+function XLGB_Banking.FormatItemCount(count)
+  count = count or 0
+  local labelKey = (count == 1) and "GENERIC_ITEM_LABEL" or "GENERIC_ITEMS_LABEL"
+  local label = (XLGB_GetString and XLGB_GetString(labelKey)) or ((count == 1) and "item" or "items")
+  return count .. " " .. label
+end
+
+local function waitForMoveItemEnd(startTime, setName, isWithdrawing, callback, isItemList, itemCount)
   -- d("waitForMoveItemEnd")
+  itemCount = itemCount or 0
   local function _waitForEnd()
     if XLGB_Banking.isMovingItems then return end
     local endTime = GetGameTimeMilliseconds()
 
-    local text = ""
     if isItemList then
       XLGB_UI:OnItemListMoveStop()
-      text = isWithdrawing and "withdrawn" or "deposited"
     else
       if isWithdrawing then
-        text = "withdrawn"
         if not XLGB_Page.isMovingPage then
           XLGB_Events:OnSingleSetWithdrawStop(setName)
         end
       else
-        text = "deposited"
         if not XLGB_Page.isMovingPage then
           XLGB_Events:OnSingleSetDepositStop(setName)
         end
       end
     end
+
+    local durationSec = (endTime - startTime) / 1000
     if XLGB_Banking.isMoveCancelled then
-      d("[XLGB_ERROR] Movement of '" .. tostring(setName) .."' got cancelled.")
+      local cancelMsg = (XLGB_GetString and XLGB_GetString("TRANSACTION_MOVE_CANCELLED")) or "[XLGB_ERROR] Movement of '%s' got cancelled."
+      d(string.format(cancelMsg, tostring(setName)))
     else
-      d("[XLGB] '" .. tostring(setName) .."' ".. text .." in " .. tostring(string.format("%.2f", (endTime - startTime)/1000)) .. " seconds.")
+      local countStr = XLGB_Banking.FormatItemCount(itemCount)
+      local key = isWithdrawing and "TRANSACTION_RESULT_WITHDRAWN" or "TRANSACTION_RESULT_DEPOSITED"
+      local defaultFmt = isWithdrawing and "[XLGB] '%s' (%s) withdrawn in %.2f seconds." or "[XLGB] '%s' (%s) deposited in %.2f seconds."
+      local formatStr = (XLGB_GetString and XLGB_GetString(key)) or defaultFmt
+      d(string.format(formatStr, tostring(setName), countStr, durationSec))
     end
     EVENT_MANAGER:UnregisterForUpdate(XLGearBanker.name .. "waitForMoveItemEnd")
+    if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+      XLGB_Banking:RestoreInventoryTab()
+    end
     if callback then
       callback(not XLGB_Banking.isMoveCancelled)
     end
@@ -443,8 +557,8 @@ local function waitForMoveItemEnd(startTime, setName, isWithdrawing, callback, i
 end
 
 function XLGB_Banking:WithdrawSet(gearSetName, qualityFilter)
-  if not XLGB_Banking.bankOpen then
-    d("[XLGB_ERROR] Bank is not open, abort!")
+  if not (XLGB_Banking.bankOpen or IsBankOpen()) then
+    d(XLGB_GetString("BANKING_NOT_OPEN"))
     PlaySound(SOUNDS.ABILITY_FAILED)
     return false
   end
@@ -453,6 +567,8 @@ function XLGB_Banking:WithdrawSet(gearSetName, qualityFilter)
     d("Already moving")
     return false
   end
+
+  XLGB_Banking:SwitchToJunkTab()
 
   XLGB_Banking.isMovingItems = true
   XLGB_Banking.isMoveCancelled = false
@@ -466,10 +582,14 @@ function XLGB_Banking:WithdrawSet(gearSetName, qualityFilter)
 
   local gearSet = XLGB_GearSet:FindGearSet(gearSetName)
   local withdrawFunc = (IsESOPlusSubscriber() and (XLGB_Banking.currentBankBag == BAG_BANK)) and withdrawGearESOPlus or function(gs, qf) return withdrawItemsNonESOPlus(gs.items, qf) end
-  local result = withdrawFunc(gearSet, qualityFilter)
+  local result, itemCount = withdrawFunc(gearSet, qualityFilter)
+  itemCount = itemCount or 0
 
   if result == "NO_ITEMS_MATCH_FILTER" then
     XLGB_Banking.isMovingItems = false
+    if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+      XLGB_Banking:RestoreInventoryTab(true)
+    end
     if not XLGB_Page.isMovingPage then
       d(XLGB_GetString("BANKING_NO_ITEMS_WITHDRAW", gearSetName))
       XLGB_Events:OnSingleSetWithdrawStop(gearSetName)
@@ -477,16 +597,22 @@ function XLGB_Banking:WithdrawSet(gearSetName, qualityFilter)
     return true
   elseif result then
     PlaySound(SOUNDS.RETRAITING_ITEM_TO_RETRAIT_REMOVED)
-    return waitForMoveItemEnd(startTime, gearSetName, true)
+    if XLGB_Page.isMovingPage then
+      XLGB_Page.itemsMovedInCurrentPage = (XLGB_Page.itemsMovedInCurrentPage or 0) + itemCount
+    end
+    return waitForMoveItemEnd(startTime, gearSetName, true, nil, false, itemCount)
   else
     PlaySound(SOUNDS.ABILITY_FAILED)
     XLGB_Banking.isMovingItems = false
-    return waitForMoveItemEnd(startTime, gearSetName, true)
+    if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+      XLGB_Banking:RestoreInventoryTab(true)
+    end
+    return waitForMoveItemEnd(startTime, gearSetName, true, nil, false, 0)
   end
 end
 
 function XLGB_Banking:WithdrawItemList(itemsToWithdraw, operationName, callback, qualityFilter)
-  if not XLGB_Banking.bankOpen then
+  if not (XLGB_Banking.bankOpen or IsBankOpen()) then
     d(XLGB_GetString("BANKING_NOT_OPEN"))
     PlaySound(SOUNDS.ABILITY_FAILED)
     if callback then callback(false) end
@@ -499,13 +625,15 @@ function XLGB_Banking:WithdrawItemList(itemsToWithdraw, operationName, callback,
     return false
   end
 
+  XLGB_Banking:SwitchToJunkTab()
+
   XLGB_Banking.isMovingItems = true
   XLGB_Banking.isMoveCancelled = false
   XLGB_Banking.movesInSuccession = 1
   XLGB_Banking.safeModeBefore = sV.safeMode
 
   local startTime = GetGameTimeMilliseconds()
-  local opTitle = operationName or "objets"
+  local opTitle = operationName or (XLGB_GetString and XLGB_GetString("GENERIC_ITEMS_LABEL")) or "items"
 
   local filter = qualityFilter or (sV and sV.withdrawQualities)
   local isESOPlus = IsESOPlusSubscriber() and (XLGB_Banking.currentBankBag == BAG_BANK)
@@ -520,6 +648,9 @@ function XLGB_Banking:WithdrawItemList(itemsToWithdraw, operationName, callback,
 
     if numberOfItemsToMove == 0 then
       XLGB_Banking.isMovingItems = false
+      if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+        XLGB_Banking:RestoreInventoryTab(true)
+      end
       d(XLGB_GetString("BANKING_NO_ITEMS_WITHDRAW", opTitle))
       if callback then callback(true) end
       return true
@@ -528,6 +659,9 @@ function XLGB_Banking:WithdrawItemList(itemsToWithdraw, operationName, callback,
     if (#availableBagSpaces < numberOfItemsToMove) then
       _onNotEnoughSpace(numberOfItemsToMove, #availableBagSpaces)
       XLGB_Banking.isMovingItems = false
+      if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+        XLGB_Banking:RestoreInventoryTab(true)
+      end
       if callback then callback(false) end
       return false
     end
@@ -548,6 +682,9 @@ function XLGB_Banking:WithdrawItemList(itemsToWithdraw, operationName, callback,
 
     if numberOfItemsToMove == 0 then
       XLGB_Banking.isMovingItems = false
+      if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+        XLGB_Banking:RestoreInventoryTab(true)
+      end
       d(XLGB_GetString("BANKING_NO_ITEMS_WITHDRAW", opTitle))
       if callback then callback(true) end
       return true
@@ -556,6 +693,9 @@ function XLGB_Banking:WithdrawItemList(itemsToWithdraw, operationName, callback,
     if (#availableBagSpaces < numberOfItemsToMove) then
       _onNotEnoughSpace(numberOfItemsToMove, #availableBagSpaces)
       XLGB_Banking.isMovingItems = false
+      if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+        XLGB_Banking:RestoreInventoryTab(true)
+      end
       if callback then callback(false) end
       return false
     end
@@ -570,7 +710,7 @@ function XLGB_Banking:WithdrawItemList(itemsToWithdraw, operationName, callback,
   end
 
   PlaySound(SOUNDS.RETRAITING_ITEM_TO_RETRAIT_REMOVED)
-  return waitForMoveItemEnd(startTime, opTitle, true, callback, true)
+  return waitForMoveItemEnd(startTime, opTitle, true, callback, true, numberOfItemsToMove)
 end
 
 --------------------------------------------------------------------------------------------
@@ -616,7 +756,7 @@ local function depositItemsToBankNonESOPlus(itemsToDeposit, qualityFilter)
       BAG_BACKPACK, inventoryItemsToMove,
       BAG_WORN, equippedItemsToMove,
       XLGB_Banking.currentBankBag, availableBagSpaces)
-  return true
+  return true, numberOfItemsToMove
 end
 
 local function depositGearToBankESOPlus(gearSet, qualityFilter)
@@ -649,7 +789,7 @@ local function depositGearToBankESOPlus(gearSet, qualityFilter)
         BAG_BACKPACK, inventoryItemsToMove,
         BAG_WORN, equippedItemsToMove,
         BAG_BANK, availableBagSpacesRegularBank)
-    return true
+    return true, numberOfItemsToMove
 
   else
     -- Add items to regular bank
@@ -678,12 +818,12 @@ local function depositGearToBankESOPlus(gearSet, qualityFilter)
     EVENT_MANAGER:UnregisterForUpdate(XLGearBanker.name .. "isWaitingForBag")
     EVENT_MANAGER:RegisterForUpdate(XLGearBanker.name .. "isWaitingForBag", 500, _waitForBag)
 
-    return true
+    return true, numberOfItemsToMove
   end
 end
 
 function XLGB_Banking:DepositSet(gearSetName, qualityFilter)
-  if not XLGB_Banking.bankOpen then
+  if not (XLGB_Banking.bankOpen or IsBankOpen()) then
     d(XLGB_GetString("BANKING_NOT_OPEN"))
     PlaySound(SOUNDS.ABILITY_FAILED)
     return false
@@ -693,6 +833,8 @@ function XLGB_Banking:DepositSet(gearSetName, qualityFilter)
     d("Already moving")
     return false
   end
+
+  XLGB_Banking:SwitchToJunkTab()
 
   XLGB_Banking.isMovingItems = true
   XLGB_Banking.isMoveCancelled = false
@@ -706,10 +848,14 @@ function XLGB_Banking:DepositSet(gearSetName, qualityFilter)
 
   local gearSet = XLGB_GearSet:FindGearSet(gearSetName)
   local depositFunc = (IsESOPlusSubscriber() and (XLGB_Banking.currentBankBag == BAG_BANK)) and depositGearToBankESOPlus or function(gs, qf) return depositItemsToBankNonESOPlus(gs.items, qf) end
-  local result = depositFunc(gearSet, qualityFilter)
+  local result, itemCount = depositFunc(gearSet, qualityFilter)
+  itemCount = itemCount or 0
 
   if result == "NO_ITEMS_MATCH_FILTER" then
     XLGB_Banking.isMovingItems = false
+    if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+      XLGB_Banking:RestoreInventoryTab(true)
+    end
     if not XLGB_Page.isMovingPage then
       d(XLGB_GetString("BANKING_NO_ITEMS_DEPOSIT", gearSetName))
       XLGB_Events:OnSingleSetDepositStop(gearSetName)
@@ -717,16 +863,22 @@ function XLGB_Banking:DepositSet(gearSetName, qualityFilter)
     return true
   elseif result then
     PlaySound(SOUNDS.INVENTORY_ITEM_UNLOCKED)
-    return waitForMoveItemEnd(startTime, gearSetName, false)
+    if XLGB_Page.isMovingPage then
+      XLGB_Page.itemsMovedInCurrentPage = (XLGB_Page.itemsMovedInCurrentPage or 0) + itemCount
+    end
+    return waitForMoveItemEnd(startTime, gearSetName, false, nil, false, itemCount)
   else
     PlaySound(SOUNDS.ABILITY_FAILED)
     XLGB_Banking.isMovingItems = false
-    return waitForMoveItemEnd(startTime, gearSetName, false)
+    if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+      XLGB_Banking:RestoreInventoryTab(true)
+    end
+    return waitForMoveItemEnd(startTime, gearSetName, false, nil, false, 0)
   end
 end
 
 function XLGB_Banking:DepositItemList(itemsToDeposit, operationName, backpackOnly, callback, qualityFilter)
-  if not XLGB_Banking.bankOpen then
+  if not (XLGB_Banking.bankOpen or IsBankOpen()) then
     d(XLGB_GetString("BANKING_NOT_OPEN"))
     PlaySound(SOUNDS.ABILITY_FAILED)
     if callback then callback(false) end
@@ -739,13 +891,15 @@ function XLGB_Banking:DepositItemList(itemsToDeposit, operationName, backpackOnl
     return false
   end
 
+  XLGB_Banking:SwitchToJunkTab()
+
   XLGB_Banking.isMovingItems = true
   XLGB_Banking.isMoveCancelled = false
   XLGB_Banking.movesInSuccession = 1
   XLGB_Banking.safeModeBefore = sV.safeMode
 
   local startTime = GetGameTimeMilliseconds()
-  local opTitle = operationName or "objets"
+  local opTitle = operationName or (XLGB_GetString and XLGB_GetString("GENERIC_ITEMS_LABEL")) or "items"
 
   local filter = qualityFilter or (sV and sV.depositQualities)
   local inventoryItemsToMove = findItemsToMove(BAG_BACKPACK, itemsToDeposit, filter)
@@ -754,6 +908,9 @@ function XLGB_Banking:DepositItemList(itemsToDeposit, operationName, backpackOnl
 
   if numberOfItemsToMove == 0 then
     XLGB_Banking.isMovingItems = false
+    if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+      XLGB_Banking:RestoreInventoryTab(true)
+    end
     d(XLGB_GetString("BANKING_NO_ITEMS_DEPOSIT", opTitle))
     if callback then callback(true) end
     return true
@@ -769,6 +926,9 @@ function XLGB_Banking:DepositItemList(itemsToDeposit, operationName, backpackOnl
     if (numberOfAvailableSpaces < numberOfItemsToMove) then
       _onNotEnoughSpace(numberOfItemsToMove, numberOfAvailableSpaces)
       XLGB_Banking.isMovingItems = false
+      if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+        XLGB_Banking:RestoreInventoryTab(true)
+      end
       if callback then callback(false) end
       return false
     end
@@ -814,6 +974,9 @@ function XLGB_Banking:DepositItemList(itemsToDeposit, operationName, backpackOnl
     if (#availableBagSpaces < numberOfItemsToMove) then
       _onNotEnoughSpace(numberOfItemsToMove, #availableBagSpaces)
       XLGB_Banking.isMovingItems = false
+      if not XLGB_Page.isMovingPage and not (XLGB_Wardrobe and XLGB_Wardrobe.isPreparingPage) then
+        XLGB_Banking:RestoreInventoryTab(true)
+      end
       if callback then callback(false) end
       return false
     end
@@ -831,7 +994,7 @@ function XLGB_Banking:DepositItemList(itemsToDeposit, operationName, backpackOnl
   end
 
   PlaySound(SOUNDS.INVENTORY_ITEM_UNLOCKED)
-  return waitForMoveItemEnd(startTime, opTitle, false, callback, true)
+  return waitForMoveItemEnd(startTime, opTitle, false, callback, true, numberOfItemsToMove)
 end
 
 --------------------------------------------------------------------------------------------
@@ -856,11 +1019,14 @@ local function printSpacesNeeded()
 end
 
 function XLGB_Banking:Initialize()
+  self.name = XLGearBanker.name
   sV = XLGearBanker.savedVariables
   self.bankOpen = IsBankOpen()
   self.isMoveCancelled = false
   self.isMovingItems = false
   self.isWaitingForBag = false
+  self.savedInventoryTabs = {}
+  self.isSwitchedToJunk = false
   self.itemMoveDelay = 0
   self.movesInSuccession = 0
   self.spacesNeeded = 0
@@ -903,6 +1069,8 @@ function XLGB_Banking:Initialize()
       -- additionalOptions,
       -- textParams)
 
-  EVENT_MANAGER:RegisterForEvent(self.name, EVENT_OPEN_BANK, self.OnBankOpenEvent)
-  EVENT_MANAGER:RegisterForEvent(self.name, EVENT_CLOSE_BANK, self.OnBankCloseEvent)
+  EVENT_MANAGER:RegisterForEvent(XLGearBanker.name, EVENT_OPEN_BANK, self.OnBankOpenEvent)
+  EVENT_MANAGER:RegisterForEvent(XLGearBanker.name, EVENT_OPEN_GUILD_BANK, self.OnBankOpenEvent)
+  EVENT_MANAGER:RegisterForEvent(XLGearBanker.name, EVENT_CLOSE_BANK, self.OnBankCloseEvent)
+  EVENT_MANAGER:RegisterForEvent(XLGearBanker.name, EVENT_CLOSE_GUILD_BANK, self.OnBankCloseEvent)
 end

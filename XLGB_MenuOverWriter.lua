@@ -27,13 +27,13 @@ local function MakeContextMenuEntry_AddItemToGearSet(itemLink, itemID)
             if (XLGB_GearSet:GetItemIndexInGearSet(itemID, i) == XLGB.ITEM_NOT_IN_SET) then
               XLGB_GearSet:AddItemToGearSet(itemLink, itemID, i)
             else
-              d("[XLGB] Item " .. itemLink .. " is already in " .. gearSetName)
+              d(string.format(XLGB_GetString("CONTEXT_ITEM_ALREADY_IN_SET") or "[XLGB] Item %s is already in '%s'.", itemLink, gearSetName))
             end
           end
       }
       table.insert(subEntries, subEntry)
     end
-    AddCustomSubMenuItem(XLGB.ADD_ITEM_TO_GEARSET, subEntries)
+    AddCustomSubMenuItem(XLGB_GetString("CONTEXT_ADD_ITEM") or XLGB.ADD_ITEM_TO_GEARSET, subEntries)
   end
 end
 
@@ -55,7 +55,7 @@ local function MakeContextMenuEntry_RemoveItemFromGearSet(itemLink, itemID)
       end
     end
     if (#subEntries ~= 0) then 
-      AddCustomSubMenuItem(XLGB.REMOVE_ITEM_FROM_GEARSET, subEntries)
+      AddCustomSubMenuItem(XLGB_GetString("CONTEXT_REMOVE_ITEM") or XLGB.REMOVE_ITEM_FROM_GEARSET, subEntries)
     end
   end
 end
@@ -65,7 +65,7 @@ local function MakeContextMenuEntry_AddSetPiecesToGearSet(itemLink)
   if not isSet or not setName or setName == "" then return end
 
   local invItems = XLGB_Inventory:GetInventoryItemsForSet(setId, setName)
-  local isBankOpen = (XLGB_Banking and XLGB_Banking.bankOpen == true)
+  local isBankOpen = (XLGB_Banking and (XLGB_Banking.bankOpen == true or (IsBankOpen and IsBankOpen())))
   local bankItems = (isBankOpen and XLGB_Inventory:GetBankItemsForSet(setId, setName)) or {}
 
   local totalInv = #invItems
@@ -93,7 +93,7 @@ local function MakeContextMenuEntry_AddSetPiecesToGearSet(itemLink)
     end
 
     local createEntry = {
-      label = string.format("|c55FF55[+ Nouveau set : %s]|r", setName),
+      label = string.format(XLGB_GetString("CONTEXT_CREATE_NEW_SET"), setName),
       callback = function()
         local newName = setName
         local counter = 2
@@ -119,6 +119,10 @@ local function MakeContextMenuEntry_AddSetPiecesToGearSet(itemLink)
     return subEntries
   end
 
+  local bothLabel = XLGB_GetString("SET_SOURCE_BOTH_LABEL")
+  local bagLabel = XLGB_GetString("SET_SOURCE_BAG_LABEL")
+  local bankLabel = XLGB_GetString("SET_SOURCE_BANK_LABEL")
+
   if totalInv > 0 and totalBank > 0 then
     local combinedItems = {}
     local seen = {}
@@ -135,15 +139,14 @@ local function MakeContextMenuEntry_AddSetPiecesToGearSet(itemLink)
       end
     end
 
-    AddCustomSubMenuItem(string.format("XLGB ajouter tout le set (%s - %d pcs)", setName, #combinedItems), buildSubmenu(combinedItems, "inventaire & banque"))
-    AddCustomSubMenuItem(string.format("XLGB ajouter set sac (%s - %d pcs)", setName, totalInv), buildSubmenu(invItems, "inventaire"))
-    AddCustomSubMenuItem(string.format("XLGB ajouter set banque (%s - %d pcs)", setName, totalBank), buildSubmenu(bankItems, "banque"))
+    AddCustomSubMenuItem(string.format(XLGB_GetString("CONTEXT_ADD_FULL_SET"), setName, #combinedItems), buildSubmenu(combinedItems, bothLabel))
+    AddCustomSubMenuItem(string.format(XLGB_GetString("CONTEXT_ADD_BAG_SET"), setName, totalInv), buildSubmenu(invItems, bagLabel))
+    AddCustomSubMenuItem(string.format(XLGB_GetString("CONTEXT_ADD_BANK_SET"), setName, totalBank), buildSubmenu(bankItems, bankLabel))
   elseif totalInv > 0 then
-    local label = isBankOpen and string.format("XLGB ajouter set sac (%s - %d pcs)", setName, totalInv)
-                              or string.format("XLGB ajouter set (%s - %d pcs)", setName, totalInv)
-    AddCustomSubMenuItem(label, buildSubmenu(invItems, "inventaire"))
+    local fmt = isBankOpen and XLGB_GetString("CONTEXT_ADD_BAG_SET") or XLGB_GetString("CONTEXT_ADD_SET")
+    AddCustomSubMenuItem(string.format(fmt, setName, totalInv), buildSubmenu(invItems, bagLabel))
   elseif totalBank > 0 then
-    AddCustomSubMenuItem(string.format("XLGB ajouter set banque (%s - %d pcs)", setName, totalBank), buildSubmenu(bankItems, "banque"))
+    AddCustomSubMenuItem(string.format(XLGB_GetString("CONTEXT_ADD_BANK_SET"), setName, totalBank), buildSubmenu(bankItems, bankLabel))
   end
 end
 
@@ -155,23 +158,23 @@ local function AddContextMenuEntries(itemLink, itemID, inventorySlot)
 end
 
 
+local ALLOWED_SLOT_TYPES = {
+  [SLOT_TYPE_ITEM] = true,
+  [SLOT_TYPE_EQUIPMENT] = true,
+  [SLOT_TYPE_BANK_ITEM] = true,
+  [SLOT_TYPE_GUILD_BANK_ITEM] = true,
+  [SLOT_TYPE_CRAFT_BAG_ITEM] = true,
+}
+
 local function OverWriteInventoryShowContextMenuHandler()
+  if not LibCustomMenu then return end
   LibCustomMenu:RegisterContextMenu(
       function(inventorySlot, slotActions)
-        -- Inventory slot should either be the player bag, equipment slots, bank, or storage containers.
-        local slotTypesAllowed = {}
-        if SLOT_TYPE_ITEM then slotTypesAllowed[SLOT_TYPE_ITEM] = true end
-        if SLOT_TYPE_EQUIPMENT then slotTypesAllowed[SLOT_TYPE_EQUIPMENT] = true end
-        if SLOT_TYPE_BANK_ITEM then slotTypesAllowed[SLOT_TYPE_BANK_ITEM] = true end
-        if SLOT_TYPE_GUILD_BANK_ITEM then slotTypesAllowed[SLOT_TYPE_GUILD_BANK_ITEM] = true end
-        if SLOT_TYPE_HOUSE_BANK then slotTypesAllowed[SLOT_TYPE_HOUSE_BANK] = true end
-        if SLOT_TYPE_STORAGE_ITEM then slotTypesAllowed[SLOT_TYPE_STORAGE_ITEM] = true end
-        if SLOT_TYPE_COMPANION_EQUIPMENT then slotTypesAllowed[SLOT_TYPE_COMPANION_EQUIPMENT] = true end
-
+        if not sV or not sV.enableItemContextMenu then return end
         local slotType = ZO_InventorySlot_GetType(inventorySlot)
-        if not slotTypesAllowed[slotType] then return end
+        if not ALLOWED_SLOT_TYPES[slotType] then return end
         local bag, index = ZO_Inventory_GetBagAndIndex(inventorySlot)
-        if bag == nil or index == nil then return end
+        if not bag or not index then return end
         local itemLink = GetItemLink(bag, index)
         if not itemLink or itemLink == "" then return end
         local itemID = Id64ToString(GetItemUniqueId(bag, index))
@@ -187,6 +190,9 @@ local function OverWriteInventoryShowContextMenuHandler()
 
 function XLGB_MenuOverWriter:Initialize()
   sV = XLGearBanker.savedVariables
+  if sV and sV.enableItemContextMenu == nil then
+    sV.enableItemContextMenu = false
+  end
   OverWriteInventoryShowContextMenuHandler()
 end
 

@@ -399,7 +399,7 @@ end
 function CMD:OnQuickSetKeybindPressed()
   local WW = WizardsWardrobe
   if not WW then
-    d("|cFF5555[XLGB]|r Wizard's Wardrobe n'est pas détecté.")
+    d("|cFF5555[XLGB]|r " .. XLGB_GetString("WW_NOT_DETECTED"))
     return
   end
 

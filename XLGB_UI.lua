@@ -1538,13 +1538,13 @@ local function setupScrollableComboBoxWithAutoReset(parentControl, containerCont
     local ddObj = targetCombo.m_dropdownObject or dropdownObj
     local owningWindow = targetCombo.m_dropdown or (ddObj and (ddObj.control or ddObj.m_dropdown))
     if ddObj and ddObj.ResetFilters and owningWindow then
-      pcall(function() ddObj:ResetFilters(owningWindow) end)
+      ddObj:ResetFilters(owningWindow)
     end
     if owningWindow and owningWindow.filterBox then
-      if owningWindow.filterBox.LoseFocus and owningWindow.filterBox.HasFocus and owningWindow.filterBox:HasFocus() then
+      if owningWindow.filterBox.LoseFocus and owningWindow.filterBox:HasFocus() then
         owningWindow.filterBox:LoseFocus()
       end
-      if owningWindow.filterBox.GetText and owningWindow.filterBox:GetText() ~= "" then
+      if owningWindow.filterBox.SetText and owningWindow.filterBox:GetText() ~= "" then
         owningWindow.filterBox:SetText("")
       end
     end
@@ -1906,6 +1906,24 @@ function XLGB_UI:InitializeSetScrollList()
   XLGB_UI:UpdateSetScrollList()
 end
 
+local function registerSetSlotUpdate()
+  EVENT_MANAGER:RegisterForEvent(XLGearBanker.name .. "SetDropdownUpdate", EVENT_INVENTORY_SINGLE_SLOT_UPDATE, function(eventCode, bagId)
+    if XLGB_Banking and XLGB_Banking.isMovingItems then return end
+    EVENT_MANAGER:UnregisterForUpdate(XLGearBanker.name .. "RefreshSetDropdown")
+    EVENT_MANAGER:RegisterForUpdate(XLGearBanker.name .. "RefreshSetDropdown", 250, function()
+      EVENT_MANAGER:UnregisterForUpdate(XLGearBanker.name .. "RefreshSetDropdown")
+      if not (XLGB_Banking and XLGB_Banking.isMovingItems) and ui.set and not ui.set:IsHidden() then
+        XLGB_UI:UpdateBankSetDropdown()
+      end
+    end)
+  end)
+end
+
+local function unregisterSetSlotUpdate()
+  EVENT_MANAGER:UnregisterForEvent(XLGearBanker.name .. "SetDropdownUpdate", EVENT_INVENTORY_SINGLE_SLOT_UPDATE)
+  EVENT_MANAGER:UnregisterForUpdate(XLGearBanker.name .. "RefreshSetDropdown")
+end
+
 function XLGB_UI:ShowSetUI()
   ui.set:SetHidden(false)
   XLGB_UI:ShowOrHideEditSet()
@@ -1925,9 +1943,11 @@ function XLGB_UI:ShowSetUI()
     reanchorSetScrollList()
     XLGB_UI:UpdateSetScrollList()
   end
+  registerSetSlotUpdate()
 end
 
 function XLGB_UI:HideSetUI()
+  unregisterSetSlotUpdate()
   if xl.isSetEditable and areThereAnySetChanges() then
     libDialog:ShowDialog("XLGearBanker", "DiscardSetChangesDialog", nil)
   else
@@ -2176,17 +2196,132 @@ function XLGB_UI:OnPageWithdrawNextSet(nextSetName)
   updateProgressBar(nextSetName, XLGB_GetString("QUALITY_WITHDRAW_NAME"))
 end
 
-local function pageMissingItemsReport(bag, pageName, isWithdrawing)
-  local function _onPageMissingWait()
-    EVENT_MANAGER:UnregisterForEvent("pageMissingItemsReport" .. XLGearBanker.name)
-    local qualityFilter = isWithdrawing and (sV.pageWithdrawQualities or sV.withdrawQualities) or (sV.pageDepositQualities or sV.depositQualities)
-    local missingItemsPage = XLGB_Page:GetMissingItemsInPage(bag, pageName, qualityFilter)
-    XLGB_UI:UpdateMissingItemsScrollList(missingItemsPage)
-    XLGB_UI:ShowMissingItemsUI()
+local function hookIIfAQuery()
+  if not IIfA or type(IIfA.QueryAccountInventory) ~= "function" or IIfA._XLGB_Hooked then return end
+  IIfA._XLGB_Hooked = true
+  local origQuery = IIfA.QueryAccountInventory
+  IIfA.QueryAccountInventory = function(self, itemLink)
+    local res = origQuery(self, itemLink)
+    if (not res or not res.locations or #res.locations == 0) and type(itemLink) == "string" then
+      local normKey = itemLink:gsub("^|H%d+:", "|H1:"):gsub("|h.-|h$", "|h|h")
+      if normKey ~= itemLink then
+        res = origQuery(self, normKey)
+      end
+      if (not res or not res.locations or #res.locations == 0) and IIFA_DATABASE and self.currentAccount and self.currentServerType then
+        local accountData = IIFA_DATABASE[self.currentAccount]
+        local serverData = accountData and accountData.servers and accountData.servers[self.currentServerType]
+        local db = serverData and serverData.DBv3
+        if db then
+          local itemId = itemLink:match(":item:(%d+):")
+          if itemId then
+            local pattern = ":item:" .. itemId .. ":"
+            for dbKey in pairs(db) do
+              if dbKey:match(pattern) then
+                res = origQuery(self, dbKey)
+                if res and res.locations and #res.locations > 0 then
+                  break
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+    return res
+  end
+end
+
+local function formatIIfALocations(itemLink)
+  hookIIfAQuery()
+  if not IIfA or type(IIfA.QueryAccountInventory) ~= "function" then return nil end
+  local query = IIfA:QueryAccountInventory(itemLink)
+  if not query or not query.locations or #query.locations == 0 then return nil end
+
+  local equippedLabel = (XLGB_GetString and XLGB_GetString("MISSING_ITEM_LOC_EQUIPPED")) or "Equipped"
+  local bagLabel = (XLGB_GetString and XLGB_GetString("MISSING_ITEM_LOC_BAG")) or "Bag"
+  local companionLabel = (XLGB_GetString and XLGB_GetString("MISSING_ITEM_LOC_COMPANION")) or "Companion"
+  local chestLabel = (XLGB_GetString and XLGB_GetString("MISSING_ITEM_LOC_CHEST")) or "Chest"
+  local bankLabel = (XLGB_GetString and XLGB_GetString("MISSING_ITEM_LOC_BANK")) or "Bank"
+
+  local locStrings = {}
+  local seen = {}
+  for _, loc in ipairs(query.locations) do
+    local locName = loc.name
+    if locName and locName ~= "" then
+      local detail = ""
+      if loc.worn then
+        detail = string.format(" (%s)", equippedLabel)
+      elseif loc.wornCompanion then
+        detail = string.format(" (%s)", companionLabel)
+      elseif loc.bagLoc == BAG_BACKPACK then
+        detail = string.format(" (%s)", bagLabel)
+      elseif loc.bagLoc == BAG_HOUSE_BANK_ONE then
+        detail = string.format(" (%s)", chestLabel)
+      elseif loc.bagLoc == BAG_BANK then
+        locName = bankLabel
+        detail = ""
+      end
+
+      local fullLocStr = locName .. detail
+      if not seen[fullLocStr] then
+        seen[fullLocStr] = true
+        table.insert(locStrings, fullLocStr)
+      end
+    end
   end
 
-  EVENT_MANAGER:UnregisterForEvent("pageMissingItemsReport" .. XLGearBanker.name)
-  EVENT_MANAGER:RegisterForEvent("pageMissingItemsReport" .. XLGearBanker.name, 500, _onPageMissingWait)
+  if #locStrings > 0 then
+    return table.concat(locStrings, ", ")
+  end
+  return nil
+end
+
+local function printMissingItemsReport(setName, missingItems)
+  if not missingItems or #missingItems == 0 then return end
+
+  local headerFmt = (XLGB_GetString and XLGB_GetString("MISSING_ITEMS_REPORT_HEADER")) or "|cFF9900[XLGB]|r Missing pieces for '%s' (%d):"
+  d(string.format(headerFmt, tostring(setName), #missingItems))
+
+  for _, itemLink in ipairs(missingItems) do
+    local locText = formatIIfALocations(itemLink)
+    local chatItemLink = itemLink
+    if zo_strformat and SI_TOOLTIP_ITEM_NAME then
+      local formatted = zo_strformat(SI_TOOLTIP_ITEM_NAME, itemLink)
+      if formatted and formatted ~= "" and formatted:find("|h") then
+        chatItemLink = formatted
+      end
+    end
+    if not chatItemLink:find("|h%[") and GetItemLinkName then
+      local itemName = GetItemLinkName(itemLink)
+      if itemName and itemName ~= "" then
+        chatItemLink = itemLink:gsub("^|H%d+:", "|H1:"):gsub("|h.-|h$", "|h[" .. itemName .. "]|h")
+      end
+    end
+
+    if locText and locText ~= "" then
+      d(string.format("  |cFFD700•|r %s -> |c88BBFF%s|r", chatItemLink, locText))
+    else
+      d(string.format("  |cFFD700•|r %s", chatItemLink))
+    end
+  end
+end
+
+local function pageMissingItemsReport(bag, pageName, isWithdrawing)
+  local function _onPageMissingWait()
+    EVENT_MANAGER:UnregisterForUpdate("pageMissingItemsReport" .. XLGearBanker.name)
+    local qualityFilter = isWithdrawing and (sV.pageWithdrawQualities or sV.withdrawQualities) or (sV.pageDepositQualities or sV.depositQualities)
+    local missingItemsPage = XLGB_Page:GetMissingItemsInPage(bag, pageName, qualityFilter)
+    if missingItemsPage and missingItemsPage.sets then
+      for _, set in ipairs(missingItemsPage.sets) do
+        if set and set.items and #set.items > 0 then
+          printMissingItemsReport(set.name, set.items)
+        end
+      end
+    end
+  end
+
+  EVENT_MANAGER:UnregisterForUpdate("pageMissingItemsReport" .. XLGearBanker.name)
+  EVENT_MANAGER:RegisterForUpdate("pageMissingItemsReport" .. XLGearBanker.name, 500, _onPageMissingWait)
 end
 
 function XLGB_UI:OnPageWithdrawStop(pageName)
@@ -2215,23 +2350,20 @@ function XLGB_UI:OnSingleSetWithdrawStart(setName, startTime)
 end
 
 local function singleSetMissingItemsReport(bag, setName, isWithdrawing)
-  local function _onPageMissingWait()
-    EVENT_MANAGER:UnregisterForEvent("pageMissingItemsReport" .. XLGearBanker.name)
+  local function _onSingleSetMissingWait()
+    EVENT_MANAGER:UnregisterForUpdate("singleSetMissingItemsReport" .. XLGearBanker.name)
     local gearSetNumber = XLGB_GearSet:GetGearSetIndex(setName)
     if not gearSetNumber then return end
-    local missingItemsPage = {}
     local qualityFilter = isWithdrawing and (sV.setWithdrawQualities or sV.withdrawQualities) or (sV.setDepositQualities or sV.depositQualities)
     local targetBag = bag or (isWithdrawing and BAG_BACKPACK or (XLGB_Banking.currentBankBag or BAG_BANK))
-    missingItemsPage.sets = {}
-    missingItemsPage.sets[1] = XLGB_GearSet:GetMissingItems(targetBag, gearSetNumber, qualityFilter)
-    if not missingItemsPage.sets[1] then return end
-    missingItemsPage.name = missingItemsPage.sets[1].name
-    XLGB_UI:UpdateMissingItemsScrollList(missingItemsPage)
-    XLGB_UI:ShowMissingItemsUI()
+    local missingSet = XLGB_GearSet:GetMissingItems(targetBag, gearSetNumber, qualityFilter)
+    if missingSet and missingSet.items and #missingSet.items > 0 then
+      printMissingItemsReport(missingSet.name, missingSet.items)
+    end
   end
 
-  EVENT_MANAGER:UnregisterForEvent("pageMissingItemsReport" .. XLGearBanker.name)
-  EVENT_MANAGER:RegisterForEvent("pageMissingItemsReport" .. XLGearBanker.name, 500, _onPageMissingWait)
+  EVENT_MANAGER:UnregisterForUpdate("singleSetMissingItemsReport" .. XLGearBanker.name)
+  EVENT_MANAGER:RegisterForUpdate("singleSetMissingItemsReport" .. XLGearBanker.name, 500, _onSingleSetMissingWait)
 end
 
 function XLGB_UI:OnSingleSetWithdrawStop(setName)
@@ -3307,24 +3439,7 @@ function XLGB_UI:Initialize()
   XLGB_UI:InitializeWardrobeScrollList()
   XLGB_UI:InitializeWardrobeSelectors()
 
-  EVENT_MANAGER:RegisterForEvent(XLGearBanker.name .. "SetDropdownUpdate", EVENT_INVENTORY_SINGLE_SLOT_UPDATE, function(eventCode, bagId, slotIndex)
-    if XLGB_Banking and XLGB_Banking.isMovingItems then return end
-    if not ui.set or ui.set:IsHidden() then return end
-
-    local isBankOpen = (XLGB_Banking and XLGB_Banking.bankOpen == true)
-    local isBankBag = (bagId == BAG_BANK or bagId == BAG_SUBSCRIBER_BANK or (XLGB_Banking and bagId == XLGB_Banking.currentBankBag))
-    local isPlayerBag = (bagId == BAG_BACKPACK or bagId == BAG_WORN)
-
-    if (isBankOpen and isBankBag) or isPlayerBag then
-      EVENT_MANAGER:UnregisterForUpdate(XLGearBanker.name .. "RefreshSetDropdown")
-      EVENT_MANAGER:RegisterForUpdate(XLGearBanker.name .. "RefreshSetDropdown", 250, function()
-        EVENT_MANAGER:UnregisterForUpdate(XLGearBanker.name .. "RefreshSetDropdown")
-        if not (XLGB_Banking and XLGB_Banking.isMovingItems) and ui.set and not ui.set:IsHidden() then
-          XLGB_UI:UpdateBankSetDropdown()
-        end
-      end)
-    end
-  end)
+  hookIIfAQuery()
 
   if sV.debug then
     XLGB_UI:ShowPageUI()
