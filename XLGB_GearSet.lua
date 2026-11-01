@@ -152,7 +152,7 @@ function XLGB_GearSet:UpdateGearSetItems(gearSetNumber)
     if bag == BAG_WORN then
       local slot = ZO_GetNextBagSlotIndex(bag)
       while slot do
-        local uid = Id64ToString(GetItemUniqueId(bag, slot))
+        local uid = (XLGB_Inventory and XLGB_Inventory.GetSlotUid and XLGB_Inventory:GetSlotUid(bag, slot)) or Id64ToString(GetItemUniqueId(bag, slot))
         if neededIds[uid] then
           foundLinks[uid] = GetItemLink(bag, slot)
           foundCount = foundCount + 1
@@ -162,7 +162,7 @@ function XLGB_GearSet:UpdateGearSetItems(gearSetNumber)
     else
       local bagSize = GetBagSize(bag)
       for slot = 0, bagSize - 1 do
-        local uid = Id64ToString(GetItemUniqueId(bag, slot))
+        local uid = (XLGB_Inventory and XLGB_Inventory.GetSlotUid and XLGB_Inventory:GetSlotUid(bag, slot)) or Id64ToString(GetItemUniqueId(bag, slot))
         if neededIds[uid] then
           foundLinks[uid] = GetItemLink(bag, slot)
           foundCount = foundCount + 1
@@ -332,7 +332,7 @@ local function updateMissingItem(fromBag, item, accList, itemIndex, gearSet)
   local bag = fromBag
   local slot = ZO_GetNextBagSlotIndex(bag)
   while slot do
-    local itemID = Id64ToString(GetItemUniqueId(bag, slot))
+    local itemID = (XLGB_Inventory and XLGB_Inventory.GetSlotUid and XLGB_Inventory:GetSlotUid(bag, slot)) or Id64ToString(GetItemUniqueId(bag, slot))
     if itemID == item.ID then
       return updateItemLink(bag, slot, itemID, itemIndex, gearSet)
     end
@@ -354,7 +354,7 @@ local function updateMissingItem(fromBag, item, accList, itemIndex, gearSet)
   end
 
   while slot do
-    local itemID = Id64ToString(GetItemUniqueId(bag, slot))
+    local itemID = (XLGB_Inventory and XLGB_Inventory.GetSlotUid and XLGB_Inventory:GetSlotUid(bag, slot)) or Id64ToString(GetItemUniqueId(bag, slot))
     if itemID == item.ID then
       return updateItemLink(bag, slot, itemID, itemIndex, gearSet)
     end

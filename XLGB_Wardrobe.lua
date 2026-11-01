@@ -440,13 +440,13 @@ function WWB:GetPageGear(characterId, zoneTag, pageId)
   -- 1. Scan BAG_WORN
   local wornSize = GetBagSize(BAG_WORN)
   for slot = 0, wornSize - 1 do
-    local uid = Id64ToString(GetItemUniqueId(BAG_WORN, slot))
-    if neededGearMap[uid] then
-      neededGearMap[uid].location = "WORN"
-      neededGearMap[uid].bag = BAG_WORN
-      neededGearMap[uid].slot = slot
-      local currentLink = GetItemLink(BAG_WORN, slot)
-      if currentLink and currentLink ~= "" then
+    local currentLink = GetItemLink(BAG_WORN, slot)
+    if currentLink and currentLink ~= "" then
+      local uid = (XLGB_Inventory and XLGB_Inventory.GetSlotUid and XLGB_Inventory:GetSlotUid(BAG_WORN, slot)) or Id64ToString(GetItemUniqueId(BAG_WORN, slot))
+      if neededGearMap[uid] then
+        neededGearMap[uid].location = "WORN"
+        neededGearMap[uid].bag = BAG_WORN
+        neededGearMap[uid].slot = slot
         neededGearMap[uid].link = currentLink
       end
     end
@@ -455,13 +455,13 @@ function WWB:GetPageGear(characterId, zoneTag, pageId)
   -- 2. Scan BAG_BACKPACK
   local bagSize = GetBagSize(BAG_BACKPACK)
   for slot = 0, bagSize - 1 do
-    local uid = Id64ToString(GetItemUniqueId(BAG_BACKPACK, slot))
-    if neededGearMap[uid] and not neededGearMap[uid].location then
-      neededGearMap[uid].location = "BAG"
-      neededGearMap[uid].bag = BAG_BACKPACK
-      neededGearMap[uid].slot = slot
-      local currentLink = GetItemLink(BAG_BACKPACK, slot)
-      if currentLink and currentLink ~= "" then
+    local currentLink = GetItemLink(BAG_BACKPACK, slot)
+    if currentLink and currentLink ~= "" then
+      local uid = (XLGB_Inventory and XLGB_Inventory.GetSlotUid and XLGB_Inventory:GetSlotUid(BAG_BACKPACK, slot)) or Id64ToString(GetItemUniqueId(BAG_BACKPACK, slot))
+      if neededGearMap[uid] and not neededGearMap[uid].location then
+        neededGearMap[uid].location = "BAG"
+        neededGearMap[uid].bag = BAG_BACKPACK
+        neededGearMap[uid].slot = slot
         neededGearMap[uid].link = currentLink
       end
     end
@@ -472,13 +472,13 @@ function WWB:GetPageGear(characterId, zoneTag, pageId)
   for _, bankBag in ipairs(bankBags) do
     local bSize = GetBagSize(bankBag)
     for slot = 0, bSize - 1 do
-      local uid = Id64ToString(GetItemUniqueId(bankBag, slot))
-      if neededGearMap[uid] and not neededGearMap[uid].location then
-        neededGearMap[uid].location = "BANK"
-        neededGearMap[uid].bag = bankBag
-        neededGearMap[uid].slot = slot
-        local currentLink = GetItemLink(bankBag, slot)
-        if currentLink and currentLink ~= "" then
+      local currentLink = GetItemLink(bankBag, slot)
+      if currentLink and currentLink ~= "" then
+        local uid = (XLGB_Inventory and XLGB_Inventory.GetSlotUid and XLGB_Inventory:GetSlotUid(bankBag, slot)) or Id64ToString(GetItemUniqueId(bankBag, slot))
+        if neededGearMap[uid] and not neededGearMap[uid].location then
+          neededGearMap[uid].location = "BANK"
+          neededGearMap[uid].bag = bankBag
+          neededGearMap[uid].slot = slot
           neededGearMap[uid].link = currentLink
         end
       end
@@ -514,6 +514,7 @@ function WWB:GetPageGear(characterId, zoneTag, pageId)
       setsMap[setName] = {
         setName = setName,
         items = {},
+        bosses = {},
         worn = 0,
         bag = 0,
         bank = 0,
@@ -523,6 +524,17 @@ function WWB:GetPageGear(characterId, zoneTag, pageId)
     end
 
     table.insert(setsMap[setName].items, item)
+    if item.setups then
+      for _, setupName in ipairs(item.setups) do
+        local found = false
+        for _, b in ipairs(setsMap[setName].bosses) do
+          if b == setupName then found = true break end
+        end
+        if not found then
+          table.insert(setsMap[setName].bosses, setupName)
+        end
+      end
+    end
     if item.location == "WORN" then
       setsMap[setName].worn = setsMap[setName].worn + 1
     elseif item.location == "BAG" then
@@ -557,8 +569,8 @@ function WWB:GetPageGear(characterId, zoneTag, pageId)
   return neededGearMap, setsList, stats
 end
 
-function WWB:GetDifferenceItems(characterId, zoneTag, pageId, qualityFilter)
-  local neededGearMap = self:GetPageGear(characterId, zoneTag, pageId)
+function WWB:GetDifferenceItems(characterId, zoneTag, pageId, qualityFilter, optNeededGearMap)
+  local neededGearMap = optNeededGearMap or self:GetPageGear(characterId, zoneTag, pageId)
   local differenceItems = {}
   local filter = qualityFilter or (XLGearBanker.savedVariables and XLGearBanker.savedVariables.wardrobeDepositQualities)
 
@@ -567,7 +579,7 @@ function WWB:GetDifferenceItems(characterId, zoneTag, pageId, qualityFilter)
     local link = GetItemLink(BAG_BACKPACK, slot)
     if link and link ~= "" then
       if XLGB_Banking:IsEquipmentItem(BAG_BACKPACK, slot, link) then
-        local uid = Id64ToString(GetItemUniqueId(BAG_BACKPACK, slot))
+        local uid = (XLGB_Inventory and XLGB_Inventory.GetSlotUid and XLGB_Inventory:GetSlotUid(BAG_BACKPACK, slot)) or Id64ToString(GetItemUniqueId(BAG_BACKPACK, slot))
         if not neededGearMap[uid] then
           if not filter or XLGB_Banking:IsItemQualityAllowed(BAG_BACKPACK, slot, link, filter) then
             local hasSet, setName = XLGB_Inventory:GetItemSetInfo(link)
@@ -746,14 +758,33 @@ function WWB:ImportAsXLGBPage(characterId, zoneTag, pageId)
     if tostring(p.id) == tostring(pageId) then pageName = p.name break end
   end
 
-  local xlPageName = "[WW] " .. charName .. " - " .. pageName
+  local xlPageName = charName .. " - " .. pageName
   local existingPage = XLGB_Page:GetPage(xlPageName)
+  if not existingPage then
+    local legacyPage = XLGB_Page:GetPage("[WW] " .. xlPageName)
+    if legacyPage then
+      XLGB_Page:SetPageName(legacyPage.name, xlPageName)
+      existingPage = legacyPage
+    end
+  end
+
   if existingPage then
+    existingPage.isWW = true
+    existingPage.wwZoneTag = zoneTag
+    existingPage.wwPageId = pageId
+    existingPage.wwCharacterId = characterId
     XLGB_Page:ClearPage(xlPageName)
   else
     local createdName = XLGB_Page:CreatePage()
     if createdName then
       XLGB_Page:SetPageName(createdName, xlPageName)
+      local page = XLGB_Page:GetPage(xlPageName)
+      if page then
+        page.isWW = true
+        page.wwZoneTag = zoneTag
+        page.wwPageId = pageId
+        page.wwCharacterId = characterId
+      end
     end
   end
 
@@ -764,15 +795,36 @@ function WWB:ImportAsXLGBPage(characterId, zoneTag, pageId)
     local noSetName = XLGB_GetString("SET_LABEL_NO_SET")
     if setGroup.setName == isolatedName or setGroup.setName == noSetName or setGroup.setName == "Pièces isolées / Mythiques" or setGroup.setName == "Sans set" then
       local otherLabel = (XLGB_GetString and XLGB_GetString("WW_ZONE_OTHER")) or "Other"
-      targetSetName = "[WW] " .. charName .. " - " .. pageName .. " (" .. otherLabel .. ")"
+      targetSetName = charName .. " - " .. pageName .. " (" .. otherLabel .. ")"
     else
-      targetSetName = "[WW] " .. charName .. " - " .. pageName .. " - " .. setGroup.setName
+      targetSetName = charName .. " - " .. pageName .. " - " .. setGroup.setName
     end
 
     local gearSet = XLGB_GearSet:FindGearSet(targetSetName)
     if not gearSet then
+      local legacySet = XLGB_GearSet:FindGearSet("[WW] " .. targetSetName)
+      if legacySet then
+        local legIdx = XLGB_GearSet:GetGearSetIndex(legacySet.name)
+        if legIdx and legIdx > 0 then
+          XLGB_GearSet:EditGearSetName(targetSetName, legIdx)
+          gearSet = XLGB_GearSet:FindGearSet(targetSetName)
+        end
+      end
+    end
+
+    if not gearSet then
       XLGB_GearSet:CreateNewGearSet(targetSetName)
       gearSet = XLGB_GearSet:FindGearSet(targetSetName)
+    end
+
+    if gearSet then
+      gearSet.isWW = true
+      gearSet.pageName = xlPageName
+      gearSet.baseSetName = setGroup.setName
+      gearSet.bosses = setGroup.bosses or {}
+      gearSet.wwZoneTag = zoneTag
+      gearSet.wwPageId = pageId
+      gearSet.wwCharacterId = characterId
     end
 
     local gsIndex = XLGB_GearSet:GetGearSetIndex(targetSetName)
@@ -781,9 +833,9 @@ function WWB:ImportAsXLGBPage(characterId, zoneTag, pageId)
       -- Sécurité absolue : on ne vide et ne réutilise JAMAIS un set qui n'est pas un import WW
       local sV = XLGearBanker.savedVariables
       if sV and sV.gearSetList and sV.gearSetList[gsIndex] then
-        local currentName = sV.gearSetList[gsIndex].name or ""
-        if string.sub(currentName, 1, 5) == "[WW] " then
-          sV.gearSetList[gsIndex].items = {}
+        local current = sV.gearSetList[gsIndex]
+        if current.isWW or string.sub(current.name or "", 1, 5) == "[WW] " then
+          current.items = {}
         end
       end
 
@@ -792,7 +844,9 @@ function WWB:ImportAsXLGBPage(characterId, zoneTag, pageId)
         for _, item in ipairs(setGroup.items) do
           table.insert(itemsToAdd, {
             link = item.link or "",
-            ID = item.id or item.ID
+            ID = item.id or item.ID,
+            setups = item.setups,
+            _scopedTo = xlPageName,
           })
         end
         XLGB_GearSet:AddItemsToGearSet(itemsToAdd, gsIndex)
@@ -808,6 +862,8 @@ function WWB:ImportAsXLGBPage(characterId, zoneTag, pageId)
   local importedPageIndex = XLGB_Page:GetIndexOfPage(xlPageName)
   if importedPageIndex and XLGearBanker.savedVariables then
     XLGearBanker.savedVariables.displayingPage = importedPageIndex
+    XLGearBanker.savedVariables.lastWWPage = importedPageIndex
+    XLGearBanker.savedVariables.pageCategoryTab = 2
   end
 
   if XLGB_UI then
@@ -823,4 +879,290 @@ function WWB:ImportAsXLGBPage(characterId, zoneTag, pageId)
   d(XLGB_GetString("WW_IMPORT_SUCCESS", xlPageName, importedSetCount))
   PlaySound(SOUNDS.BOOK_ACQUIRED)
   return true
+end
+
+local function matchZoneTag(name)
+  if not name or name == "" then return nil end
+  local clean = name:lower():gsub("^v", ""):gsub("%s*%(.*%)", ""):gsub("%s+", "")
+  for tag, zName in pairs(DEFAULT_ZONE_NAMES) do
+    local cleanZName = zName:lower():gsub("%s+", "")
+    local cleanTag = tag:lower()
+    if clean == cleanTag or clean == cleanZName or clean == ("v" .. cleanTag) then
+      return tag
+    end
+    if string.len(clean) >= 4 and (cleanZName:find(clean, 1, true) or clean:find(cleanZName, 1, true)) then
+      return tag
+    end
+  end
+  local WW = WizardsWardrobe
+  if WW and WW.zones then
+    for tag, z in pairs(WW.zones) do
+      if z and z.name then
+        local cleanZName = z.name:lower():gsub("%s+", "")
+        local cleanTag = tostring(tag):lower()
+        if clean == cleanTag or clean == cleanZName or clean == ("v" .. cleanTag) then
+          return tag
+        end
+        if string.len(clean) >= 4 and (cleanZName:find(clean, 1, true) or clean:find(cleanZName, 1, true)) then
+          return tag
+        end
+      end
+    end
+  end
+  return nil
+end
+
+function WWB:FindParentPageForSet(gearSet)
+  if not gearSet then return nil end
+  local sV = XLGearBanker and XLGearBanker.savedVariables
+  local pages = sV and sV.pages
+  if not pages then return nil end
+  local targetName = gearSet.name
+  if not targetName or targetName == "" then return nil end
+  for _, page in ipairs(pages) do
+    if page and page.sets then
+      for _, sName in ipairs(page.sets) do
+        if sName == targetName then
+          return page
+        end
+      end
+    end
+  end
+  return nil
+end
+
+function WWB:GetSetupsForItem(item, gearSet, forceRefresh)
+  if not item then return nil end
+
+  local isWWSet = gearSet and (gearSet.isWW or (gearSet.name and string.sub(gearSet.name, 1, 5) == "[WW] "))
+  if not isWWSet and gearSet and gearSet.name then
+    local parentPage = self:FindParentPageForSet(gearSet)
+    if parentPage and (parentPage.isWW or string.sub(parentPage.name or "", 1, 5) == "[WW] ") then
+      isWWSet = true
+      gearSet.isWW = true
+    end
+  end
+
+  if isWWSet and gearSet then
+    if not gearSet.pageName or not gearSet.wwZoneTag then
+      local parentPage = self:FindParentPageForSet(gearSet)
+      if parentPage then
+        if not gearSet.pageName then gearSet.pageName = parentPage.name end
+        if not gearSet.wwZoneTag and parentPage.wwZoneTag then gearSet.wwZoneTag = parentPage.wwZoneTag end
+        if not gearSet.wwPageId and parentPage.wwPageId then gearSet.wwPageId = parentPage.wwPageId end
+        if not gearSet.wwCharacterId and parentPage.wwCharacterId then gearSet.wwCharacterId = parentPage.wwCharacterId end
+      end
+    end
+  end
+
+  local contextKey = gearSet and (gearSet.pageName or gearSet.name or "") or ""
+  if not forceRefresh and item.setups and #item.setups > 0 and (item._scopedTo == contextKey or contextKey == "") then
+    return item.setups
+  end
+
+  local targetId = item.ID or item.id
+  local targetLink = item.link or item.itemLink
+  if (not targetId or targetId == "") and (not targetLink or targetLink == "") then
+    return nil
+  end
+
+  local targetIdStr = targetId and tostring(targetId)
+  local wwData = self:GetWWSavedVariables()
+  if not wwData then return nil end
+
+  local foundSetups = {}
+  local seen = {}
+
+  local function scanStorageSetups(storage, filterZoneTag, filterPageId)
+    if not storage or not storage.setups then return end
+
+    local zonesToScan = {}
+    if filterZoneTag and storage.setups[filterZoneTag] then
+      zonesToScan[filterZoneTag] = storage.setups[filterZoneTag]
+    elseif not filterZoneTag and not isWWSet then
+      zonesToScan = storage.setups
+    else
+      return
+    end
+
+    for zoneTag, pages in pairs(zonesToScan) do
+      if type(pages) == "table" then
+        local pagesToScan = {}
+        if filterPageId and pages[filterPageId] then
+          pagesToScan[filterPageId] = pages[filterPageId]
+        elseif not filterPageId then
+          pagesToScan = pages
+        else
+          pagesToScan = pages
+        end
+
+        for pageId, pageSetups in pairs(pagesToScan) do
+          if type(pageSetups) == "table" then
+            for setupIdx, setup in ipairs(pageSetups) do
+              if setup and setup.gear then
+                local setupName = setup.name or ("Setup " .. setupIdx)
+                for slotIdx, gear in pairs(setup.gear) do
+                  if type(gear) == "table" and gear.id and gear.id ~= "" and gear.id ~= "0" then
+                    local match = false
+                    if targetIdStr and tostring(gear.id) == targetIdStr then
+                      match = true
+                    elseif targetLink and gear.link and gear.link ~= "" and gear.link == targetLink then
+                      match = true
+                    end
+                    if match and not seen[setupName] then
+                      seen[setupName] = true
+                      table.insert(foundSetups, setupName)
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  -- Determine Character and Scoped Zone / Page
+  local filterZoneTag = gearSet and gearSet.wwZoneTag
+  local filterPageId = gearSet and gearSet.wwPageId
+  local characterId = gearSet and gearSet.wwCharacterId
+  local storage = characterId and self:GetCharacterStorage(characterId)
+
+  if gearSet and (not storage or not filterZoneTag) then
+    local fullName = gearSet.pageName or gearSet.name or ""
+    if string.sub(fullName, 1, 5) == "[WW] " then
+      fullName = string.sub(fullName, 6)
+    end
+    local parts = {}
+    for part in string.gmatch(fullName .. " - ", "(.-) %- ") do
+      local trimmed = part:gsub("^%s+", ""):gsub("%s+$", "")
+      if trimmed ~= "" then
+        table.insert(parts, trimmed)
+      end
+    end
+
+    local charName = parts[1]
+    local pageOrZoneName = parts[2]
+
+    if not storage and charName and charName ~= "" then
+      local chars = self:GetCharacters()
+      for _, ch in ipairs(chars) do
+        if ch.name == charName then
+          characterId = ch.id
+          storage = self:GetCharacterStorage(ch.id)
+          break
+        end
+      end
+      if not storage and wwData then
+        for cid, cdata in pairs(wwData) do
+          if type(cdata) == "table" and cdata["$LastCharacterName"] == charName then
+            characterId = tostring(cid)
+            storage = self:GetCharacterStorage(cid)
+            break
+          end
+        end
+      end
+    end
+
+    if storage and not filterZoneTag and pageOrZoneName and pageOrZoneName ~= "" then
+      local cleanPageName = pageOrZoneName:gsub("%s*%(.*%)", ""):gsub("^%s+", ""):gsub("%s+$", "")
+      local baseClean = cleanPageName:gsub("%s*[%d%-%.%/]+%s*$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+
+      if storage.pages then
+        for zTag, pTable in pairs(storage.pages) do
+          if type(pTable) == "table" then
+            for pId, pInfo in pairs(pTable) do
+              if pId ~= 0 and type(pInfo) == "table" and pInfo.name then
+                if zo_strlower(pInfo.name) == zo_strlower(cleanPageName) then
+                  filterZoneTag = zTag
+                  filterPageId = pId
+                  break
+                end
+                local basePName = pInfo.name:gsub("%s*[%d%-%.%/]+%s*$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+                if #baseClean >= 3 and zo_strlower(baseClean) == zo_strlower(basePName) then
+                  filterZoneTag = zTag
+                  filterPageId = pId
+                  break
+                end
+              end
+            end
+            if filterZoneTag then break end
+          end
+        end
+      end
+
+      if not filterZoneTag then
+        filterZoneTag = matchZoneTag(cleanPageName)
+      end
+
+      if not filterZoneTag and storage.setups then
+        for zTag, pTable in pairs(storage.setups) do
+          if type(pTable) == "table" then
+            for pId, setups in pairs(pTable) do
+              if type(setups) == "table" then
+                for _, s in ipairs(setups) do
+                  if s.gear then
+                    for _, g in pairs(s.gear) do
+                      if type(g) == "table" and ((targetIdStr and tostring(g.id) == targetIdStr) or (targetLink and g.link == targetLink)) then
+                        filterZoneTag = zTag
+                        filterPageId = pId
+                        break
+                      end
+                    end
+                  end
+                  if filterZoneTag then break end
+                end
+              end
+              if filterZoneTag then break end
+            end
+          end
+        end
+      end
+
+      if filterZoneTag and gearSet then
+        gearSet.wwZoneTag = filterZoneTag
+        gearSet.wwPageId = filterPageId
+        gearSet.wwCharacterId = characterId
+      end
+    end
+  end
+
+  -- Execute Scoped Scan
+  if storage then
+    scanStorageSetups(storage, filterZoneTag, filterPageId)
+  end
+
+  -- Fallback: ONLY if gearSet is NOT a WW set, scan current char storage
+  if #foundSetups == 0 and not isWWSet and not storage and not filterZoneTag then
+    local currentCharId = GetCurrentCharacterId and tostring(Id64ToString(GetCurrentCharacterId()))
+    if currentCharId then
+      local curStorage = self:GetCharacterStorage(currentCharId)
+      scanStorageSetups(curStorage, nil, nil)
+    end
+  end
+
+  if #foundSetups > 0 then
+    item.setups = foundSetups
+    item._scopedTo = contextKey
+    return foundSetups
+  else
+    item.setups = nil
+    item._scopedTo = contextKey
+    return nil
+  end
+end
+
+function WWB:EnrichImportedSetsWithSetups()
+  local sV = XLGearBanker and XLGearBanker.savedVariables
+  if not sV or not sV.gearSetList then return end
+  for _, gearSet in ipairs(sV.gearSetList) do
+    if gearSet.isWW or string.sub(gearSet.name or "", 1, 5) == "[WW] " then
+      if gearSet.items then
+        for _, item in ipairs(gearSet.items) do
+          self:GetSetupsForItem(item, gearSet, true)
+        end
+      end
+    end
+  end
 end

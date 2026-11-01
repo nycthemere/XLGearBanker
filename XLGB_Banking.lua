@@ -18,6 +18,12 @@ function XLGB_Banking.OnBankOpenEvent(event, bankBag)
   if not XLGB_Banking.bankOpen then
     XLGB_Banking.bankOpen = true
     XLGB_Banking.currentBankBag = bankBag or GetBankingBag()
+    if XLGB_Inventory and XLGB_Inventory.InvalidateAllSlots then
+      XLGB_Inventory:InvalidateAllSlots()
+    end
+    if XLGB_UI and XLGB_UI.ClearIIfACache then
+      XLGB_UI:ClearIIfACache()
+    end
     XLGB_UI:OnBankOpen()
     KEYBIND_STRIP:AddKeybindButtonGroup(XLGB_Banking.bankButtonGroup)
     easyDebug("Bank open!")
@@ -28,6 +34,12 @@ function XLGB_Banking.OnBankCloseEvent(event)
   XLGB_Banking.bankOpen = false
   XLGB_Banking.currentBankBag = XLGB.NO_BAG
   XLGB_Banking.isMoveCancelled = true
+  if XLGB_Inventory and XLGB_Inventory.InvalidateAllSlots then
+    XLGB_Inventory:InvalidateAllSlots()
+  end
+  if XLGB_UI and XLGB_UI.ClearIIfACache then
+    XLGB_UI:ClearIIfACache()
+  end
   XLGB_Banking:RestoreInventoryTab(true)
   XLGB_UI:OnBankClosed()
   KEYBIND_STRIP:RemoveKeybindButtonGroup(XLGB_Banking.bankButtonGroup)
@@ -124,10 +136,14 @@ end
 
 local function findItemIndexInBag(bag, itemID)
   local item_index = XLGB.ITEM_NOT_IN_BAG
-  for i = 0, GetBagSize(bag) do
-    if (Id64ToString(GetItemUniqueId(bag, i)) == itemID) then
-      item_index = i
-      return item_index
+  local bagSize = GetBagSize(bag)
+  for i = 0, bagSize - 1 do
+    local link = GetItemLink(bag, i)
+    if link and link ~= "" then
+      local uid = XLGB_Inventory and XLGB_Inventory.GetSlotUid and XLGB_Inventory:GetSlotUid(bag, i) or Id64ToString(GetItemUniqueId(bag, i))
+      if uid == itemID then
+        return i
+      end
     end
   end
   return item_index
@@ -206,13 +222,16 @@ local function findItemsToMove(sourceBag, sourceItems, qualityFilter)
     local bagSize = GetBagSize(sourceBag)
     for i = 0, bagSize - 1 do
       if not matchedSlots[i] then
-        if Id64ToString(GetItemUniqueId(sourceBag, i)) == item.ID then
-          foundIndex = i
-          local currentLink = GetItemLink(sourceBag, i)
-          if currentLink and currentLink ~= "" and currentLink ~= item.link then
-            item.link = currentLink
+        local currentLink = GetItemLink(sourceBag, i)
+        if currentLink and currentLink ~= "" then
+          local uid = XLGB_Inventory and XLGB_Inventory.GetSlotUid and XLGB_Inventory:GetSlotUid(sourceBag, i) or Id64ToString(GetItemUniqueId(sourceBag, i))
+          if uid == item.ID then
+            foundIndex = i
+            if currentLink ~= item.link then
+              item.link = currentLink
+            end
+            break
           end
-          break
         end
       end
     end

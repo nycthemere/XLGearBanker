@@ -2,6 +2,46 @@ XLGB_Inventory = {}
 
 local XLGB = XLGB_Constants
 
+local itemSetInfoCache = {}
+local slotUidCache = {}
+
+function XLGB_Inventory:ClearItemSetInfoCache()
+  itemSetInfoCache = {}
+end
+
+function XLGB_Inventory:GetSlotUid(bag, slot)
+  if not slotUidCache[bag] then
+    slotUidCache[bag] = {}
+  end
+  local uid = slotUidCache[bag][slot]
+  if not uid then
+    local rawId = GetItemUniqueId and GetItemUniqueId(bag, slot)
+    if rawId then
+      uid = Id64ToString(rawId)
+    end
+    if not uid or uid == "" or uid == "0" then
+      local link = GetItemLink and GetItemLink(bag, slot)
+      uid = (link and link ~= "") and link or "0"
+    end
+    slotUidCache[bag][slot] = uid
+  end
+  return uid
+end
+
+function XLGB_Inventory:InvalidateSlot(bag, slot)
+  if slotUidCache[bag] then
+    slotUidCache[bag][slot] = nil
+  end
+end
+
+function XLGB_Inventory:InvalidateBag(bag)
+  slotUidCache[bag] = nil
+end
+
+function XLGB_Inventory:InvalidateAllSlots()
+  slotUidCache = {}
+end
+
 function XLGB_Inventory:GetEquippedItems()
   local equippedItems = {}
   -- for _, slot in pairs(XLGB_Inventory.validEquippedSlots) do
@@ -10,7 +50,7 @@ function XLGB_Inventory:GetEquippedItems()
   while slot do
       local itemLink = GetItemLink(bag, slot)
       if itemLink and itemLink ~= "" then
-        local itemID = Id64ToString(GetItemUniqueId(bag, slot))
+        local itemID = self:GetSlotUid(bag, slot)
         local itemData = XLGB_GearSet:CreateItemData(itemLink, itemID)
         table.insert(equippedItems, itemData)
       end
@@ -37,17 +77,29 @@ function XLGB_Inventory:GetItemSetInfo(itemLink)
   if not itemLink or itemLink == "" then
     return false, nil, nil
   end
+
+  local cached = itemSetInfoCache[itemLink]
+  if cached ~= nil then
+    return cached.isSet, cached.setName, cached.setId
+  end
+
+  local isSet, setName, setId = false, nil, nil
   if LibSets and LibSets.IsSetByItemLink then
-    local isSet, setName, setId = LibSets.IsSetByItemLink(itemLink)
-    if isSet then
-      return true, setName, setId
+    local lsIsSet, lsSetName, lsSetId = LibSets.IsSetByItemLink(itemLink)
+    if lsIsSet then
+      isSet, setName, setId = true, lsSetName, lsSetId
     end
   end
-  local hasSet, setName, _, _, _, setId = GetItemLinkSetInfo(itemLink, false)
-  if hasSet and setName and setName ~= "" then
-    return true, setName, setId
+
+  if not isSet then
+    local hasSet, gSetName, _, _, _, gSetId = GetItemLinkSetInfo(itemLink, false)
+    if hasSet and gSetName and gSetName ~= "" then
+      isSet, setName, setId = true, gSetName, gSetId
+    end
   end
-  return false, nil, nil
+
+  itemSetInfoCache[itemLink] = { isSet = isSet, setName = setName, setId = setId }
+  return isSet, setName, setId
 end
 
 function XLGB_Inventory:GetCharacterBags()
@@ -84,10 +136,7 @@ function XLGB_Inventory:GetSetsInBags(bags)
   XLGB_Inventory:ForEachItemInBags(bags, function(bag, slot, itemLink)
     local isSet, setName, setId = XLGB_Inventory:GetItemSetInfo(itemLink)
     if isSet and setName and setName ~= "" then
-      local itemID = Id64ToString(GetItemUniqueId(bag, slot))
-      if not itemID or itemID == "" or itemID == "0" then
-        itemID = itemLink
-      end
+      local itemID = XLGB_Inventory:GetSlotUid(bag, slot)
 
       local key = setId or setName
       if not setsMap[key] then
@@ -145,10 +194,7 @@ function XLGB_Inventory:GetItemsForSetInBags(bags, targetSetId, targetSetName)
       end
     end
     if match then
-      local itemID = Id64ToString(GetItemUniqueId(bag, slot))
-      if not itemID or itemID == "" or itemID == "0" then
-        itemID = itemLink
-      end
+      local itemID = XLGB_Inventory:GetSlotUid(bag, slot)
       if not seenItemIds[itemID] then
         seenItemIds[itemID] = true
         table.insert(items, {
@@ -333,4 +379,14 @@ function XLGB_Inventory:GetAllAvailableSets()
 end
 
 function XLGB_Inventory:Initialize()
+  self:InvalidateAllSlots()
+  self:ClearItemSetInfoCache()
+  if EVENT_MANAGER and EVENT_MANAGER.RegisterForEvent then
+    EVENT_MANAGER:RegisterForEvent("XLGB_Inventory_SlotUpdate", EVENT_INVENTORY_SINGLE_SLOT_UPDATE, function(eventCode, bagId, slotIndex)
+      XLGB_Inventory:InvalidateSlot(bagId, slotIndex)
+      if XLGB_UI and XLGB_UI.ClearIIfACache then
+        XLGB_UI:ClearIIfACache()
+      end
+    end)
+  end
 end

@@ -12,8 +12,8 @@
 # Ignorer tous les fichiers .txt
 *.txt
 
-# Mais garder MugShot.txt
-!MugShot.txt
+# Mais garder XLGearBanker.txt
+!XLGearBanker.txt
 
 # Exclure les exécutables et téléchargements Love2D
 /tests/preview/love*/

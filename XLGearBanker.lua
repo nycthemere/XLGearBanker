@@ -39,8 +39,16 @@ XLGearBanker.savedVariables = {
   fastTransferJunkTab = true,
   enableItemContextMenu = false,
   quickSetTargetName = "",
+  quickSetTargetName2 = "",
   quickSetChoices = {},
-  quickSetUndoStack = {}
+  quickSetUndoStack = {},
+  quickSetUndoStack2 = {},
+  pageCategoryTab = 1,
+  lastCustomPage = 1,
+  lastWWPage = 1,
+  setCategoryTab = 1,
+  lastCustomSet = 1,
+  lastWWSet = 1
 }
 
 function XLGearBanker.OnAddOnLoaded(event, addonName)
@@ -48,6 +56,7 @@ function XLGearBanker.OnAddOnLoaded(event, addonName)
     EVENT_MANAGER:UnregisterForEvent(XLGearBanker.name, EVENT_ADD_ON_LOADED)
     XLGB_Constants:Initialize()
     XLGearBanker:Initialize()
+    XLGB_Inventory:Initialize()
     XLGB_GearSet:Initialize()
     XLGB_Page:Initialize()
     XLGB_Banking:Initialize()
@@ -119,48 +128,142 @@ function XLGearBanker:Initialize()
   if sV.quickSetTargetName == nil then
     sV.quickSetTargetName = ""
   end
+  if sV.quickSetTargetName2 == nil then
+    sV.quickSetTargetName2 = ""
+  end
   if sV.quickSetChoices == nil then
     sV.quickSetChoices = {}
   end
   if sV.quickSetUndoStack == nil then
     sV.quickSetUndoStack = {}
   end
+  if sV.quickSetUndoStack2 == nil then
+    sV.quickSetUndoStack2 = {}
+  end
+  if sV.pageCategoryTab == nil then
+    sV.pageCategoryTab = 1
+  end
+  if sV.lastCustomPage == nil then
+    sV.lastCustomPage = 1
+  end
+  if sV.lastWWPage == nil then
+    sV.lastWWPage = 1
+  end
+  if sV.setCategoryTab == nil then
+    sV.setCategoryTab = 1
+  end
+  if sV.lastCustomSet == nil then
+    sV.lastCustomSet = 1
+  end
+  if sV.lastWWSet == nil then
+    sV.lastWWSet = 1
+  end
+
+  -- Migration: Clean obsolete [WW] prefix from saved pages and sets, tagging them with isWW = true
+  if sV.pages then
+    for _, page in ipairs(sV.pages) do
+      if page.name and string.sub(page.name, 1, 5) == "[WW] " then
+        page.isWW = true
+        page.name = string.sub(page.name, 6)
+      end
+      if page.sets then
+        for i, setName in ipairs(page.sets) do
+          if string.sub(setName, 1, 5) == "[WW] " then
+            page.sets[i] = string.sub(setName, 6)
+          end
+        end
+      end
+    end
+  end
+  if sV.gearSetList then
+    for _, gearSet in ipairs(sV.gearSetList) do
+      if gearSet.name and string.sub(gearSet.name, 1, 5) == "[WW] " then
+        gearSet.isWW = true
+        gearSet.name = string.sub(gearSet.name, 6)
+      end
+    end
+  end
+
+  if XLGB_Wardrobe and XLGB_Wardrobe.EnrichImportedSetsWithSetups then
+    XLGB_Wardrobe:EnrichImportedSetsWithSetups()
+  end
 end
 
 EVENT_MANAGER:RegisterForEvent(XLGearBanker.name, EVENT_ADD_ON_LOADED, XLGearBanker.OnAddOnLoaded)
 
 -------------------------------------------------------------------------------
---Slash Commands! --
+-- Slash Commands Dispatcher --
 -- Note: Slash commands should not contain capital letters!
-SLASH_COMMANDS["/xlgb_debug"] = function(argsv)
-  if sV.debug then
-    d("[XLGB] Debugging = off.")
-    sV.debug = false
+-------------------------------------------------------------------------------
+
+function XLGearBanker:PrintSlashHelp()
+  local C = XLGB_Constants
+  local colTag = C.COLORS.CHAT_TAG
+  local colCmd = C.COLORS.GOLD
+  local colDesc = C.COLORS.WHITE
+  local colMuted = C.COLORS.MUTED
+
+  d(string.format("%s %s", colTag, C.Colorize(C.COLORS.GOLD_LIGHT, XLGB_GetString("SLASH_HELP_HEADER"))))
+  d(string.format("  %s %s %s", C.Colorize(colCmd, "/xlgb"), C.Colorize(colMuted, "-"), C.Colorize(colDesc, XLGB_GetString("SLASH_HELP_MAIN"))))
+  d(string.format("  %s %s %s", C.Colorize(colCmd, "/xlgb set"), C.Colorize(colMuted, "-"), C.Colorize(colDesc, XLGB_GetString("SLASH_HELP_SETS"))))
+  d(string.format("  %s %s %s", C.Colorize(colCmd, "/xlgb page"), C.Colorize(colMuted, "-"), C.Colorize(colDesc, XLGB_GetString("SLASH_HELP_PAGES"))))
+  d(string.format("  %s %s %s", C.Colorize(colCmd, "/xlgb ww"), C.Colorize(colMuted, "-"), C.Colorize(colDesc, XLGB_GetString("SLASH_HELP_WW"))))
+  d(string.format("  %s %s %s", C.Colorize(colCmd, "/xlgb settings"), C.Colorize(colMuted, "-"), C.Colorize(colDesc, XLGB_GetString("SLASH_HELP_SETTINGS"))))
+  d(string.format("  %s %s %s", C.Colorize(colCmd, "/xlgb debug"), C.Colorize(colMuted, "-"), C.Colorize(colDesc, XLGB_GetString("SLASH_HELP_DEBUG"))))
+  d(string.format("  %s %s %s", C.Colorize(colCmd, "/xlgb help"), C.Colorize(colMuted, "-"), C.Colorize(colDesc, XLGB_GetString("SLASH_HELP_HELP"))))
+end
+
+function XLGearBanker:HandleSlashCommand(extra)
+  local args = {}
+  if extra and extra ~= "" then
+    for word in string.gmatch(extra, "%S+") do
+      table.insert(args, word:lower())
+    end
+  end
+
+  local cmd = args[1]
+
+  if not cmd or cmd == "" then
+    XLGB_UI:ToggleAllUI()
+    return
+  end
+
+  if cmd == "help" or cmd == "?" then
+    self:PrintSlashHelp()
+  elseif cmd == "set" or cmd == "sets" then
+    XLGB_UI:ToggleSetUI()
+  elseif cmd == "page" or cmd == "pages" then
+    XLGB_UI:TogglePageUI()
+  elseif cmd == "ww" or cmd == "wardrobe" then
+    if not WizardsWardrobe then
+      d(string.format("%s %s", XLGB_Constants.COLORS.CHAT_WARNING, XLGB_GetString("SLASH_WW_NOT_AVAILABLE")))
+    else
+      XLGB_UI:ToggleWardrobeUI()
+    end
+  elseif cmd == "settings" or cmd == "config" or cmd == "options" or cmd == "opt" then
+    XLGB_UI:ToggleSettings()
+  elseif cmd == "debug" then
+    local sVars = XLGearBanker.savedVariables or sV
+    sVars.debug = not sVars.debug
+    if sV then sV.debug = sVars.debug end
+    local state = sVars.debug and XLGB_Constants.COLORS.Colorize(XLGB_Constants.COLORS.GREEN, "ON") or XLGB_Constants.COLORS.Colorize(XLGB_Constants.COLORS.RED, "OFF")
+    d(string.format("%s %s", XLGB_Constants.COLORS.CHAT_TAG, XLGB_GetString("SLASH_DEBUG_STATE", state)))
   else
-    d("[XLGB] Debugging = on.")
-    sV.debug = true
+    d(string.format("%s %s", XLGB_Constants.COLORS.CHAT_ERROR, XLGB_GetString("SLASH_UNKNOWN_SUBCOMMAND", tostring(cmd))))
   end
 end
 
-SLASH_COMMANDS["/xlgb_overlay"] = function(argsv)
-  XLGB_GreyOverlay:SetHidden(not XLGB_GreyOverlay:IsHidden())
+-- Primary command
+SLASH_COMMANDS["/xlgb"] = function(extra)
+  XLGearBanker:HandleSlashCommand(extra)
 end
 
-SLASH_COMMANDS["/xlgb_help"] = function(argsv)
-  d("[XLGB] Commands")
-  d("'/xlgb_debug': Toggles debug mode. (Note: quite verbose)")
-end
-
-SLASH_COMMANDS["/xlgb"] = function()
-  XLGB_UI:ToggleAllUI()
-end
-
-SLASH_COMMANDS["/xlgb_pages"] = function()
-  XLGB_UI:TogglePageUI()
-end
+-- Backward compatibility aliases
+SLASH_COMMANDS["/xlgb_help"] = function() XLGearBanker:HandleSlashCommand("help") end
+SLASH_COMMANDS["/xlgb_debug"] = function() XLGearBanker:HandleSlashCommand("debug") end
+SLASH_COMMANDS["/xlgb_pages"] = function() XLGearBanker:HandleSlashCommand("page") end
 SLASH_COMMANDS["/xlgb_page"] = SLASH_COMMANDS["/xlgb_pages"]
-
-SLASH_COMMANDS["/xlgb_ww"] = function()
-  XLGB_UI:ToggleWardrobeUI()
-end
+SLASH_COMMANDS["/xlgb_sets"] = function() XLGearBanker:HandleSlashCommand("set") end
+SLASH_COMMANDS["/xlgb_set"] = SLASH_COMMANDS["/xlgb_sets"]
+SLASH_COMMANDS["/xlgb_ww"] = function() XLGearBanker:HandleSlashCommand("ww") end
 -------------------------------------------------------------------------------

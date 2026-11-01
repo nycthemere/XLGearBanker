@@ -1,6 +1,8 @@
 -- Namespace
 XLGB_Settings = {}
 local sV
+local COLORS = XLGB_Constants.COLORS
+local Colorize = COLORS.Colorize
 
 function XLGB_Settings:Initialize()
   sV = XLGearBanker.savedVariables
@@ -11,7 +13,7 @@ function XLGB_Settings:Initialize()
   local panelData = {
     type = "panel",
     name = menuName,
-    displayName = "|cffecbc" .. menuName .. "|r",
+    displayName = Colorize(COLORS.GOLD, menuName),
     author = XLGearBanker.author,
     version = XLGearBanker.version,
     slashCommand = "/xlgb_settings",
@@ -307,104 +309,128 @@ function XLGB_Settings:Initialize()
   table.insert(optionsTable, buildQualitySubmenu(XLGB_GetString("QUALITY_CONTEXT_TITLE", XLGB_GetString("QUALITY_WITHDRAW_NAME"), "Wardrobe"), XLGB_GetString("QUALITY_WITHDRAW_TOOLTIP"), sV.wardrobeWithdrawQualities, true, "wardrobe"))
   table.insert(optionsTable, buildQualitySubmenu(XLGB_GetString("SETTINGS_QUALITY_FILTERS_WW_DEPOSIT"), XLGB_GetString("SETTINGS_QUALITY_FILTERS_WW_DEPOSIT_DESC"), sV.wardrobeDepositQualities, false, "wardrobe"))
 
-  -- Quick Set Keybind (Wizard's Wardrobe)
-  table.insert(optionsTable, {
-    type = "header",
-    name = XLGB_GetString("SETTINGS_QUICK_SET_HEADER"),
-    width = "full"
-  })
-  table.insert(optionsTable, {
-    type = "editbox",
-    name = XLGB_GetString("SETTINGS_QUICK_SET_TARGET"),
-    tooltip = XLGB_GetString("SETTINGS_QUICK_SET_TARGET_DESC"),
-    getFunc = function() return sV.quickSetTargetName or "" end,
-    setFunc = function(v) sV.quickSetTargetName = v end,
-    width = "full"
-  })
-  table.insert(optionsTable, {
-    type = "dropdown",
-    name = XLGB_GetString("SETTINGS_QUICK_SET_DETECTED_DROPDOWN"),
-    tooltip = XLGB_GetString("SETTINGS_QUICK_SET_DETECTED_DROPDOWN_DESC"),
-    choices = function()
-      local list = { "-" }
-      if WizardsWardrobe and WizardsWardrobe.selection and XLGB_Wardrobe then
-        local zoneTag = WizardsWardrobe.selection.zone and WizardsWardrobe.selection.zone.tag or "GEN"
-        local pageId = WizardsWardrobe.selection.pageId or 1
-        local charId = WizardsWardrobe.currentCharacterId
-        if charId then
-          local _, setsList = XLGB_Wardrobe:GetPageGear(charId, zoneTag, pageId)
-          if setsList then
-            for _, s in ipairs(setsList) do
-              if s.setName and s.setName ~= "" and not s.isIsolated then
-                table.insert(list, s.setName)
+  -- Quick Set Keybinds #1 & #2 (Wizard's Wardrobe)
+  for slot = 1, 2 do
+    local headerKey = (slot == 2) and "SETTINGS_QUICK_SET_2_HEADER" or "SETTINGS_QUICK_SET_HEADER"
+    local getTarget = function() return (slot == 2 and sV.quickSetTargetName2 or sV.quickSetTargetName) or "" end
+    local setTarget = function(v)
+      v = v or ""
+      if slot == 2 then
+        sV.quickSetTargetName2 = v
+        if v ~= "" and sV.quickSetTargetName == v then
+          sV.quickSetTargetName = ""
+        end
+      else
+        sV.quickSetTargetName = v
+        if v ~= "" and sV.quickSetTargetName2 == v then
+          sV.quickSetTargetName2 = ""
+        end
+      end
+    end
+
+    table.insert(optionsTable, {
+      type = "header",
+      name = XLGB_GetString(headerKey),
+      width = "full"
+    })
+    table.insert(optionsTable, {
+      type = "editbox",
+      name = XLGB_GetString("SETTINGS_QUICK_SET_TARGET"),
+      tooltip = XLGB_GetString("SETTINGS_QUICK_SET_TARGET_DESC"),
+      getFunc = getTarget,
+      setFunc = setTarget,
+      width = "full"
+    })
+    table.insert(optionsTable, {
+      type = "dropdown",
+      name = XLGB_GetString("SETTINGS_QUICK_SET_DETECTED_DROPDOWN"),
+      tooltip = XLGB_GetString("SETTINGS_QUICK_SET_DETECTED_DROPDOWN_DESC"),
+      choices = function()
+        local list = { "-" }
+        if WizardsWardrobe and WizardsWardrobe.selection and XLGB_Wardrobe then
+          local zoneTag = WizardsWardrobe.selection.zone and WizardsWardrobe.selection.zone.tag or "GEN"
+          local pageId = WizardsWardrobe.selection.pageId or 1
+          local charId = WizardsWardrobe.currentCharacterId
+          if charId then
+            local _, setsList = XLGB_Wardrobe:GetPageGear(charId, zoneTag, pageId)
+            if setsList then
+              for _, s in ipairs(setsList) do
+                if s.setName and s.setName ~= "" and not s.isIsolated then
+                  table.insert(list, s.setName)
+                end
               end
             end
           end
         end
-      end
-      return list
-    end,
-    getFunc = function()
-      return (sV.quickSetTargetName and sV.quickSetTargetName ~= "") and sV.quickSetTargetName or "-"
-    end,
-    setFunc = function(v)
-      if v ~= "-" then
-        sV.quickSetTargetName = v
-      end
-    end,
-    width = "full",
-    disabled = function() return not WizardsWardrobe end
-  })
-  table.insert(optionsTable, {
-    type = "dropdown",
-    name = XLGB_GetString("SETTINGS_QUICK_SET_CONFLICT_CHOICE"),
-    tooltip = XLGB_GetString("SETTINGS_QUICK_SET_CONFLICT_CHOICE_DESC"),
-    choices = function()
-      local list = { "Demander en jeu (Menu contextuel)" }
-      if WizardsWardrobe and WizardsWardrobe.selection and XLGB_Command then
+        return list
+      end,
+      getFunc = function()
+        local cur = getTarget()
+        return (cur and cur ~= "") and cur or "-"
+      end,
+      setFunc = function(v)
+        if v ~= "-" then
+          setTarget(v)
+        end
+      end,
+      width = "full",
+      disabled = function() return not WizardsWardrobe end
+    })
+    table.insert(optionsTable, {
+      type = "dropdown",
+      name = XLGB_GetString("SETTINGS_QUICK_SET_CONFLICT_CHOICE"),
+      tooltip = XLGB_GetString("SETTINGS_QUICK_SET_CONFLICT_CHOICE_DESC"),
+      choices = function()
+        local list = { "Demander en jeu (Menu contextuel)" }
+        local cur = getTarget()
+        if WizardsWardrobe and WizardsWardrobe.selection and XLGB_Command and cur and cur ~= "" then
+          local zoneTag = WizardsWardrobe.selection.zone and WizardsWardrobe.selection.zone.tag or "GEN"
+          local pageId = WizardsWardrobe.selection.pageId or 1
+          local matches = XLGB_Command:FindSetupsWithSet(zoneTag, pageId, cur)
+          for _, m in ipairs(matches) do
+            table.insert(list, string.format("[%d] %s", m.index, m.name))
+          end
+        end
+        return list
+      end,
+      getFunc = function()
+        local cur = getTarget()
+        if WizardsWardrobe and WizardsWardrobe.selection and XLGB_Command and cur and cur ~= "" then
+          local charId = WizardsWardrobe.currentCharacterId
+          local zoneTag = WizardsWardrobe.selection.zone and WizardsWardrobe.selection.zone.tag or "GEN"
+          local pageId = WizardsWardrobe.selection.pageId or 1
+          local saved = XLGB_Command:GetSavedSetupChoice(charId, zoneTag, pageId, cur)
+          if saved and saved.index and saved.name then
+            return string.format("[%d] %s", saved.index, saved.name)
+          end
+        end
+        return "Demander en jeu (Menu contextuel)"
+      end,
+      setFunc = function(v)
+        local cur = getTarget()
+        if WizardsWardrobe and WizardsWardrobe.selection and XLGB_Command and cur and cur ~= "" then
+          local charId = WizardsWardrobe.currentCharacterId
+          local zoneTag = WizardsWardrobe.selection.zone and WizardsWardrobe.selection.zone.tag or "GEN"
+          local pageId = WizardsWardrobe.selection.pageId or 1
+          local idx = string.match(v, "%[(%d+)%]")
+          if idx then
+            idx = tonumber(idx)
+            local name = string.gsub(v, "%[%d+%]%s*", "")
+            XLGB_Command:SaveSetupChoice(charId, zoneTag, pageId, cur, idx, name)
+          end
+        end
+      end,
+      width = "full",
+      disabled = function()
+        local cur = getTarget()
+        if not WizardsWardrobe or not WizardsWardrobe.selection or not XLGB_Command or not cur or cur == "" then return true end
         local zoneTag = WizardsWardrobe.selection.zone and WizardsWardrobe.selection.zone.tag or "GEN"
         local pageId = WizardsWardrobe.selection.pageId or 1
-        local matches = XLGB_Command:FindSetupsWithSet(zoneTag, pageId, sV.quickSetTargetName)
-        for _, m in ipairs(matches) do
-          table.insert(list, string.format("[%d] %s", m.index, m.name))
-        end
+        local matches = XLGB_Command:FindSetupsWithSet(zoneTag, pageId, cur)
+        return #matches <= 1
       end
-      return list
-    end,
-    getFunc = function()
-      if WizardsWardrobe and WizardsWardrobe.selection and XLGB_Command then
-        local charId = WizardsWardrobe.currentCharacterId
-        local zoneTag = WizardsWardrobe.selection.zone and WizardsWardrobe.selection.zone.tag or "GEN"
-        local pageId = WizardsWardrobe.selection.pageId or 1
-        local saved = XLGB_Command:GetSavedSetupChoice(charId, zoneTag, pageId, sV.quickSetTargetName)
-        if saved and saved.index and saved.name then
-          return string.format("[%d] %s", saved.index, saved.name)
-        end
-      end
-      return "Demander en jeu (Menu contextuel)"
-    end,
-    setFunc = function(v)
-      if WizardsWardrobe and WizardsWardrobe.selection and XLGB_Command then
-        local charId = WizardsWardrobe.currentCharacterId
-        local zoneTag = WizardsWardrobe.selection.zone and WizardsWardrobe.selection.zone.tag or "GEN"
-        local pageId = WizardsWardrobe.selection.pageId or 1
-        local idx = string.match(v, "%[(%d+)%]")
-        if idx then
-          idx = tonumber(idx)
-          local name = string.gsub(v, "%[%d+%]%s*", "")
-          XLGB_Command:SaveSetupChoice(charId, zoneTag, pageId, sV.quickSetTargetName, idx, name)
-        end
-      end
-    end,
-    width = "full",
-    disabled = function()
-      if not WizardsWardrobe or not WizardsWardrobe.selection or not XLGB_Command then return true end
-      local zoneTag = WizardsWardrobe.selection.zone and WizardsWardrobe.selection.zone.tag or "GEN"
-      local pageId = WizardsWardrobe.selection.pageId or 1
-      local matches = XLGB_Command:FindSetupsWithSet(zoneTag, pageId, sV.quickSetTargetName)
-      return #matches <= 1
-    end
-  })
+    })
+  end
 
   table.insert(
     optionsTable,

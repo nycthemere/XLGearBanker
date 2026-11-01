@@ -3,6 +3,9 @@ XLGB_UI = {}
 local libDialog = LibDialog
 local libSB = LibShifterBox
 local LAM = LibAddonMenu2
+local COLORS = XLGB_Constants.COLORS
+local Colorize = COLORS.Colorize
+local unpack = unpack or table.unpack
 local ui = {}
 local sV = {}
 local xl = {}
@@ -10,7 +13,9 @@ local setEditSetFalse
 local setEditPageFalse
 
 function XLGB_UI:ToggleSettings()
-  LAM:OpenToPanel(XLGB_Settings.panel)
+  if LAM and XLGB_Settings and XLGB_Settings.panel then
+    LAM:OpenToPanel(XLGB_Settings.panel)
+  end
 end
 
 function XLGB_UI:XLGB_SetWindow_OnMoveStop()
@@ -135,11 +140,35 @@ local function areThereAnyPageChanges()
 end
 
 function XLGB_UI:ShowOrHideEditPage()
-  XLGB_UI:ShowOrHideEdit(ui.page.pageRow.edit, XLGB_Page:GetNumberOfPages())
+  local activeTab = (sV and sV.pageCategoryTab) or 1
+  local count = 0
+  local totalPages = XLGB_Page:GetNumberOfPages()
+  for i = 1, totalPages do
+    local p = XLGB_Page:GetPageByIndex(i)
+    if p then
+      local isWW = p.isWW or (string.sub(p.name, 1, 5) == "[WW] ")
+      if (activeTab == 2 and isWW) or (activeTab == 1 and not isWW) then
+        count = count + 1
+      end
+    end
+  end
+  XLGB_UI:ShowOrHideEdit(ui.page.pageRow.edit, count)
 end
 
 function XLGB_UI:ShowOrHideEditSet()
-  XLGB_UI:ShowOrHideEdit(ui.set.setRow.edit, XLGB_GearSet:GetNumberOfGearSets())
+  local activeTab = (sV and sV.setCategoryTab) or 1
+  local count = 0
+  local totalSets = XLGB_GearSet:GetNumberOfGearSets()
+  for i = 1, totalSets do
+    local gs = XLGB_GearSet:GetGearSet(i)
+    if gs then
+      local isWW = gs.isWW or (string.sub(gs.name or "", 1, 5) == "[WW] ")
+      if (activeTab == 2 and isWW) or (activeTab == 1 and not isWW) then
+        count = count + 1
+      end
+    end
+  end
+  XLGB_UI:ShowOrHideEdit(ui.set.setRow.edit, count)
 end
 
 function XLGB_UI:ShowOrHideEdit(edit, numberOfPagesOrSets)
@@ -426,8 +455,17 @@ function XLGB_UI:AddRemovePage()
 end
 
 function XLGB_UI:AddPage()
+  local activeTab = (sV and sV.pageCategoryTab) or 1
+  if activeTab == 2 then
+    if XLGB_UI.ToggleWardrobeUI then
+      XLGB_UI:ToggleWardrobeUI()
+    end
+    return
+  end
+
   local newPageName = XLGB_Page:CreatePage()
   sV.displayingPage = XLGB_Page:GetIndexOfPage(newPageName)
+  sV.lastCustomPage = sV.displayingPage
   XLGB_UI:SelectPage(sV.displayingPage)
 
   XLGB_UI:TogglePageEdit()
@@ -458,7 +496,8 @@ local function removePageConfirmed()
   if #setsInPage > 0 then
     xl.deletedPageName = pageName
     xl.deletedPageSets = setsInPage
-    local isWW = (string.sub(pageName, 1, 5) == "[WW] ")
+    local isWW = currentPage.isWW or (string.sub(pageName, 1, 5) == "[WW] ")
+    xl.deletedPageIsWW = isWW
     local dialogEntry = ESO_Dialogs["XLGearBanker_RemovePageSetsDialog"]
     if dialogEntry and dialogEntry.mainText then
       if isWW then
@@ -526,7 +565,9 @@ end
 local function InitPageWindowTooltips()
   CreatePageTooltip(ui.page.pageRow.edit, XLGB_GetString("PAGE_TOOLTIP_EDIT_CURRENT"), XLGB_GetString("PAGE_TOOLTIP_DISCARD"))
   CreatePageTooltip(ui.page.pageRow.accept, XLGB_GetString("PAGE_TOOLTIP_ACCEPT_CHANGES"))
-  CreatePageTooltip(ui.page.pageRow.addRemovePage, XLGB_GetString("PAGE_TOOLTIP_CREATE_NEW"), XLGB_GetString("PAGE_TOOLTIP_REMOVE_CURRENT"))
+  CreatePageTooltip(ui.page.pageRow.addRemovePage, function()
+    return (sV and sV.pageCategoryTab == 2) and XLGB_GetString("PAGE_TOOLTIP_ADD_WW") or XLGB_GetString("PAGE_TOOLTIP_CREATE_NEW")
+  end, XLGB_GetString("PAGE_TOOLTIP_REMOVE_CURRENT"))
   CreatePageTooltip(ui.page.shifterRow.setEditor, XLGB_GetString("PAGE_TOOLTIP_SET_EDITOR"))
   if ui.page.titleRow.settings then
     CreatePageTooltip(ui.page.titleRow.settings, XLGB_GetString("PAGE_TOOLTIP_SETTINGS"))
@@ -581,25 +622,25 @@ function XLGB_UI:OnWardrobeBankButtonMouseUp(control, mouseButton, filterType)
 end
 
 local function getFilterSummary(qualityTable)
-  if not qualityTable then return XLGB_GetString("QUALITY_SUMMARY_ALL"), "|c00ff00" end
+  if not qualityTable then return XLGB_GetString("QUALITY_SUMMARY_ALL"), COLORS.QUALITY_ALLOW_ALL end
   local count = 0
   for q = 1, 5 do
     if qualityTable[q] then count = count + 1 end
   end
   if count == 5 then
-    return XLGB_GetString("QUALITY_SUMMARY_ALL"), "|c00ff00"
+    return XLGB_GetString("QUALITY_SUMMARY_ALL"), COLORS.QUALITY_ALLOW_ALL
   elseif count == 0 then
-    return XLGB_GetString("QUALITY_SUMMARY_BLOCKED"), "|cff5555"
+    return XLGB_GetString("QUALITY_SUMMARY_BLOCKED"), COLORS.QUALITY_BLOCKED
   elseif count == 1 and qualityTable[5] then
-    return XLGB_GetString("QUALITY_SUMMARY_GOLD_ONLY"), "|cffd700"
+    return XLGB_GetString("QUALITY_SUMMARY_GOLD_ONLY"), COLORS.QUALITY_GOLD
   elseif count == 4 and not qualityTable[5] then
-    return XLGB_GetString("QUALITY_SUMMARY_NO_GOLD"), "|cffffff"
+    return XLGB_GetString("QUALITY_SUMMARY_NO_GOLD"), COLORS.QUALITY_NO_GOLD
   elseif count == 2 and qualityTable[4] and qualityTable[5] then
-    return XLGB_GetString("QUALITY_SUMMARY_EPIC_LEGENDARY"), "|ca02ef7"
+    return XLGB_GetString("QUALITY_SUMMARY_EPIC_LEGENDARY"), COLORS.QUALITY_EPIC
   elseif count == 4 and not qualityTable[1] then
-    return XLGB_GetString("QUALITY_SUMMARY_FINE_TO_GOLD"), "|c2dc50e"
+    return XLGB_GetString("QUALITY_SUMMARY_FINE_TO_GOLD"), COLORS.QUALITY_FINE
   else
-    return string.format(XLGB_GetString("QUALITY_SUMMARY_ACTIVE_COUNT"), count), "|ce6cc80"
+    return string.format(XLGB_GetString("QUALITY_SUMMARY_ACTIVE_COUNT"), count), COLORS.QUALITY_ACTIVE_COUNT
   end
 end
 
@@ -621,7 +662,7 @@ local function onQualityDropdownMouseEnter(control, filterType, moduleType)
     if not qName or qName == "" then qName = GetString("SI_ITEMQUALITY", q) end
     local color = GetItemQualityColor(q)
     local colored = color and color:Colorize(qName) or qName
-    local status = isActive and ("|c00ff00" .. XLGB_GetString("QUALITY_STATUS_ACTIVE") .. "|r") or ("|c666666" .. XLGB_GetString("QUALITY_STATUS_INACTIVE") .. "|r")
+    local status = isActive and (Colorize(COLORS.ACTIVE, XLGB_GetString("QUALITY_STATUS_ACTIVE"))) or (Colorize(COLORS.QUALITY_INACTIVE, XLGB_GetString("QUALITY_STATUS_INACTIVE")))
     InformationTooltip:AddLine(status .. " " .. colored, "ZoFontGameSmall")
   end
 
@@ -645,39 +686,39 @@ function XLGB_UI:ShowQualityContextMenu(anchorControl, filterType, moduleType)
   local modLabel = modNames[moduleType] or "XLGB"
   local title = isWithdraw and string.format(XLGB_GetString("QUALITY_MENU_TITLE_WITHDRAW"), modLabel) or string.format(XLGB_GetString("QUALITY_MENU_TITLE_DEPOSIT"), modLabel)
   local act = isWithdraw and XLGB_GetString("QUALITY_ACTION_WITHDRAW") or XLGB_GetString("QUALITY_ACTION_DEPOSIT")
-  AddCustomMenuItem("|cffffaa=== " .. title .. " ===|r", nil)
+  AddCustomMenuItem(Colorize(COLORS.QUALITY_MENU_TITLE, "=== " .. title .. " ==="), nil)
 
-  AddCustomMenuItem("|cffd700" .. string.format(XLGB_GetString("QUALITY_PRESET_GOLD_ONLY"), act) .. "|r", function()
+  AddCustomMenuItem(Colorize(COLORS.QUALITY_GOLD, string.format(XLGB_GetString("QUALITY_PRESET_GOLD_ONLY"), act)), function()
     for q = 1, 5 do qualityTable[q] = (q == 5) end
     XLGB_UI:RefreshQualityFilters()
     if moduleType == "wardrobe" and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
   end)
 
-  AddCustomMenuItem("|cffffff" .. string.format(XLGB_GetString("QUALITY_PRESET_NO_GOLD"), act) .. "|r", function()
+  AddCustomMenuItem(Colorize(COLORS.QUALITY_NO_GOLD, string.format(XLGB_GetString("QUALITY_PRESET_NO_GOLD"), act)), function()
     for q = 1, 5 do qualityTable[q] = (q ~= 5) end
     XLGB_UI:RefreshQualityFilters()
     if moduleType == "wardrobe" and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
   end)
 
-  AddCustomMenuItem("|ca02ef7" .. XLGB_GetString("QUALITY_PRESET_EPIC_LEGENDARY") .. "|r", function()
+  AddCustomMenuItem(Colorize(COLORS.QUALITY_EPIC, XLGB_GetString("QUALITY_PRESET_EPIC_LEGENDARY")), function()
     for q = 1, 5 do qualityTable[q] = (q >= 4) end
     XLGB_UI:RefreshQualityFilters()
     if moduleType == "wardrobe" and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
   end)
 
-  AddCustomMenuItem("|c2dc50e" .. XLGB_GetString("QUALITY_PRESET_FINE_TO_GOLD") .. "|r", function()
+  AddCustomMenuItem(Colorize(COLORS.QUALITY_FINE, XLGB_GetString("QUALITY_PRESET_FINE_TO_GOLD")), function()
     for q = 1, 5 do qualityTable[q] = (q >= 2) end
     XLGB_UI:RefreshQualityFilters()
     if moduleType == "wardrobe" and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
   end)
 
-  AddCustomMenuItem("|c00ff00" .. XLGB_GetString("QUALITY_PRESET_ALLOW_ALL") .. "|r", function()
+  AddCustomMenuItem(Colorize(COLORS.QUALITY_ALLOW_ALL, XLGB_GetString("QUALITY_PRESET_ALLOW_ALL")), function()
     for q = 1, 5 do qualityTable[q] = true end
     XLGB_UI:RefreshQualityFilters()
     if moduleType == "wardrobe" and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
   end)
 
-  AddCustomMenuItem("|cff5555" .. XLGB_GetString("QUALITY_PRESET_DENY_ALL") .. "|r", function()
+  AddCustomMenuItem(Colorize(COLORS.QUALITY_BLOCKED, XLGB_GetString("QUALITY_PRESET_DENY_ALL")), function()
     for q = 1, 5 do qualityTable[q] = false end
     XLGB_UI:RefreshQualityFilters()
     if moduleType == "wardrobe" and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
@@ -726,43 +767,43 @@ local function setupQualityDropdownItems(comboBoxObj, filterType, containerCtrl,
   end
 
   -- 1. Tout autoriser
-  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry("|c00ff00" .. XLGB_GetString("QUALITY_PRESET_ALLOW_ALL") .. "|r", function()
+  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry(Colorize(COLORS.QUALITY_ALLOW_ALL, XLGB_GetString("QUALITY_PRESET_ALLOW_ALL")), function()
     for q = 1, 5 do qualityTable[q] = true end
     onFilterChanged()
   end), ZO_COMBOBOX_SUPRESS_UPDATE)
 
   -- 2. Tout sauf Or
-  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry("|cffffff" .. string.format(XLGB_GetString("QUALITY_PRESET_NO_GOLD"), act) .. "|r", function()
+  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry(Colorize(COLORS.QUALITY_NO_GOLD, string.format(XLGB_GetString("QUALITY_PRESET_NO_GOLD"), act)), function()
     for q = 1, 5 do qualityTable[q] = (q ~= 5) end
     onFilterChanged()
   end), ZO_COMBOBOX_SUPRESS_UPDATE)
 
   -- 3. Seulement Or
-  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry("|cffd700" .. string.format(XLGB_GetString("QUALITY_PRESET_GOLD_ONLY"), act) .. "|r", function()
+  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry(Colorize(COLORS.QUALITY_GOLD, string.format(XLGB_GetString("QUALITY_PRESET_GOLD_ONLY"), act)), function()
     for q = 1, 5 do qualityTable[q] = (q == 5) end
     onFilterChanged()
   end), ZO_COMBOBOX_SUPRESS_UPDATE)
 
   -- 4. Violet & Or
-  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry("|ca02ef7" .. XLGB_GetString("QUALITY_PRESET_EPIC_LEGENDARY") .. "|r", function()
+  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry(Colorize(COLORS.QUALITY_EPIC, XLGB_GetString("QUALITY_PRESET_EPIC_LEGENDARY")), function()
     for q = 1, 5 do qualityTable[q] = (q >= 4) end
     onFilterChanged()
   end), ZO_COMBOBOX_SUPRESS_UPDATE)
 
   -- 5. Vert à Or
-  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry("|c2dc50e" .. XLGB_GetString("QUALITY_PRESET_FINE_TO_GOLD") .. "|r", function()
+  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry(Colorize(COLORS.QUALITY_FINE, XLGB_GetString("QUALITY_PRESET_FINE_TO_GOLD")), function()
     for q = 1, 5 do qualityTable[q] = (q >= 2) end
     onFilterChanged()
   end), ZO_COMBOBOX_SUPRESS_UPDATE)
 
   -- 6. Tout refuser
-  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry("|cff5555" .. XLGB_GetString("QUALITY_PRESET_DENY_ALL") .. "|r", function()
+  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry(Colorize(COLORS.QUALITY_BLOCKED, XLGB_GetString("QUALITY_PRESET_DENY_ALL")), function()
     for q = 1, 5 do qualityTable[q] = false end
     onFilterChanged()
   end), ZO_COMBOBOX_SUPRESS_UPDATE)
 
   -- 7. Personnaliser...
-  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry("|cffecbc" .. XLGB_GetString("QUALITY_PRESET_CUSTOMIZE") .. "|r", function()
+  comboBoxObj:AddItem(ZO_ComboBox:CreateItemEntry(Colorize(COLORS.QUALITY_CUSTOMIZE, XLGB_GetString("QUALITY_PRESET_CUSTOMIZE")), function()
     XLGB_UI:ShowQualityContextMenu(containerCtrl, filterType, moduleType)
   end), ZO_COMBOBOX_SUPRESS_UPDATE)
 end
@@ -832,25 +873,122 @@ function XLGB_UI:SelectPage(pageNumber)
     sV.displayingPage = pageNumber
   end
 
+  if sV then
+    local page = XLGB_Page:GetPageByIndex(sV.displayingPage)
+    if page then
+      local isWW = page.isWW or (string.sub(page.name, 1, 5) == "[WW] ")
+      if isWW then
+        sV.lastWWPage = sV.displayingPage
+      else
+        sV.lastCustomPage = sV.displayingPage
+      end
+    end
+  end
+
   XLGB_UI:UpdatePageScrollList()
 end
 
+function XLGB_UI:SelectPageCategoryTab(tabIndex)
+  if sV then
+    sV.pageCategoryTab = tabIndex
+  end
+  XLGB_UI:UpdatePageDropdown()
+  XLGB_UI:UpdatePageScrollList()
+  XLGB_UI:ShowOrHideEditPage()
+end
+
 function XLGB_UI:UpdatePageDropdown()
-  local dd = ui.page.pageRow.page.dropdown
+  local dd = ui.page and ui.page.pageRow and ui.page.pageRow.page and ui.page.pageRow.page.dropdown
+  if not dd then return end
+
+  local activeTab = (sV and sV.pageCategoryTab) or 1
+
+  local customPages = {}
+  local wwPages = {}
+  local totalPages = XLGB_Page:GetNumberOfPages()
+  for i = 1, totalPages do
+    local page = XLGB_Page:GetPageByIndex(i)
+    if page then
+      local isWW = page.isWW or (string.sub(page.name, 1, 5) == "[WW] ")
+      local displayName = page.name
+      if isWW and string.sub(displayName, 1, 5) == "[WW] " then
+        displayName = string.sub(displayName, 6)
+      end
+      if isWW then
+        table.insert(wwPages, { index = i, name = page.name, displayName = displayName })
+      else
+        table.insert(customPages, { index = i, name = page.name, displayName = displayName })
+      end
+    end
+  end
+
+  local tabRow = ui.page and ui.page.tabRow
+  if tabRow then
+    local tabCustomLabel = tabRow.tabCustom and tabRow.tabCustom:GetNamedChild("_Label")
+    local tabWWLabel = tabRow.tabWW and tabRow.tabWW:GetNamedChild("_Label")
+    if tabCustomLabel then
+      tabCustomLabel:SetText(string.format("%s (%d)", XLGB_GetString("PAGE_TAB_CUSTOM"), #customPages))
+      tabCustomLabel:SetColor(unpack(activeTab == 1 and COLORS.RGBA.TAB_ACTIVE or COLORS.RGBA.TAB_MUTED))
+    end
+    if tabWWLabel then
+      tabWWLabel:SetText(string.format("%s (%d)", XLGB_GetString("PAGE_TAB_WW"), #wwPages))
+      tabWWLabel:SetColor(unpack(activeTab == 2 and COLORS.RGBA.TAB_ACTIVE or COLORS.RGBA.TAB_MUTED))
+    end
+  end
+
   dd:ClearItems()
-  for i = 1, XLGB_Page:GetNumberOfPages() do
-    local entry =
-      ZO_ComboBox:CreateItemEntry(
-      XLGB_Page:GetPageByIndex(i).name,
+  local currentList = (activeTab == 2) and wwPages or customPages
+
+  if #currentList == 0 then
+    local emptyText = (activeTab == 2) and XLGB_GetString("PAGE_NO_PAGES_WW") or XLGB_GetString("PAGE_NO_PAGES_CUSTOM")
+    dd:SetSelectedItemText(emptyText)
+    return
+  end
+
+  local selectedRelativeIndex = 1
+  local foundCurrent = false
+
+  for relIdx, item in ipairs(currentList) do
+    local entry = ZO_ComboBox:CreateItemEntry(
+      item.displayName,
       function()
-        XLGB_UI:SelectPage(i)
+        XLGB_UI:SelectPage(item.index)
+        if sV then
+          if activeTab == 2 then
+            sV.lastWWPage = item.index
+          else
+            sV.lastCustomPage = item.index
+          end
+        end
       end
     )
+    entry.pageIndex = item.index
     dd:AddItem(entry, ZO_COMBOBOX_SUPRESS_UPDATE)
+
+    if sV and sV.displayingPage and sV.displayingPage == item.index then
+      selectedRelativeIndex = relIdx
+      foundCurrent = true
+    end
   end
-  if XLGB_Page:GetNumberOfPages() > 0 and sV.displayingPage and sV.displayingPage > 0 then
-    dd:SelectItemByIndex(sV.displayingPage, true)
+
+  if not foundCurrent then
+    local preferredIndex = sV and ((activeTab == 2) and sV.lastWWPage or sV.lastCustomPage)
+    if preferredIndex then
+      for relIdx, item in ipairs(currentList) do
+        if item.index == preferredIndex then
+          selectedRelativeIndex = relIdx
+          break
+        end
+      end
+    end
+    local targetPage = currentList[selectedRelativeIndex]
+    if targetPage and sV then
+      sV.displayingPage = targetPage.index
+      XLGB_UI:UpdatePageScrollList()
+    end
   end
+
+  dd:SelectItemByIndex(selectedRelativeIndex, true)
 end
 
 function XLGB_UI:InitializePageDropdown()
@@ -866,12 +1004,27 @@ function XLGB_UI:UpdatePageScrollList()
   if XLGB_Page:GetNumberOfPages() > 0 and sV.displayingPage and sV.displayingPage > 0 then
     local page = XLGB_Page:GetPageByIndex(sV.displayingPage)
     if page then
+      local isWWPage = page.isWW or (string.sub(page.name, 1, 5) == "[WW] ")
       for _, set in pairs(XLGB_Page:GetSetsInPage(page.name)) do
+        local displayName = set
+        if isWWPage then
+          local cleanSet = (string.sub(set, 1, 5) == "[WW] ") and string.sub(set, 6) or set
+          local cleanPage = (string.sub(page.name, 1, 5) == "[WW] ") and string.sub(page.name, 6) or page.name
+          if cleanSet:sub(1, #cleanPage + 3) == cleanPage .. " - " then
+            displayName = cleanSet:sub(#cleanPage + 4)
+          elseif cleanSet:sub(1, #cleanPage) == cleanPage then
+            local rest = cleanSet:sub(#cleanPage + 1):match("^%s*(.-)%s*$")
+            if rest and rest ~= "" then
+              displayName = rest
+            end
+          end
+        end
         local dataEntry =
           ZO_ScrollList_CreateDataEntry(
           XLGB_Constants.PAGE_ITEM_ROW,
           {
-            setName = set
+            setName = set,
+            displayName = displayName
           }
         )
         table.insert(scrollData, dataEntry)
@@ -935,11 +1088,15 @@ local function fillPageItemRowWithData(control, data)
 
   local nameCtrl = control:GetNamedChild("_Name")
   if nameCtrl then
-    nameCtrl:SetText("|cffecbc" .. tostring(data.setName or "") .. "|r")
+    nameCtrl:SetText(Colorize(COLORS.GOLD, data.displayName or data.setName or ""))
     nameCtrl:SetHidden(false)
   end
   local itemCount = (gearSet and gearSet.items and #gearSet.items) or 0
-  control:GetNamedChild("_ItemsInSet"):SetText("Items: " .. tostring(itemCount))
+  local itemsCtrl = control:GetNamedChild("_ItemsInSet")
+  if itemsCtrl then
+    local itemsText = string.format(XLGB_GetString("PAGE_ITEMS_COUNT") or "Items: %d", itemCount)
+    itemsCtrl:SetText(Colorize(COLORS.GREY, itemsText))
+  end
 
   --
   local function toggleSetUI(self)
@@ -961,7 +1118,80 @@ local function fillPageItemRowWithData(control, data)
     _showPageHighlight(ctrl)
     if data and data.setName and data.setName ~= "" then
       InitializeTooltip(InformationTooltip, ctrl, TOPRIGHT, 0, 5, BOTTOMRIGHT)
-      SetTooltipText(InformationTooltip, data.setName)
+      local tooltipLines = {}
+      local title = data.displayName or data.setName
+      table.insert(tooltipLines, Colorize(COLORS.GOLD, title))
+
+      local isWWPage = (sV and sV.pageCategoryTab == 2) or (gearSet and gearSet.isWW)
+
+      if gearSet and gearSet.items and #gearSet.items > 0 then
+        table.insert(tooltipLines, Colorize(COLORS.MUTED, string.format(XLGB_GetString("WW_TOOLTIP_PIECES_COUNT"), #gearSet.items)))
+
+        if isWWPage then
+          local setupGroups = {}
+          local groupOrder = {}
+          local contextKey = gearSet and (gearSet.pageName or gearSet.name or "") or ""
+
+          for _, item in ipairs(gearSet.items) do
+            local setups = item.setups
+            if (not setups or #setups == 0 or item._scopedTo ~= contextKey) and XLGB_Wardrobe and XLGB_Wardrobe.GetSetupsForItem then
+              setups = XLGB_Wardrobe:GetSetupsForItem(item, gearSet)
+            end
+            local itemDisplayName = item.link or item.ID or ""
+            local setupKey = (setups and #setups > 0) and table.concat(setups, ", ") or ""
+
+            if not setupGroups[setupKey] then
+              setupGroups[setupKey] = {
+                setups = setups,
+                setupKey = setupKey,
+                items = {},
+              }
+              table.insert(groupOrder, setupKey)
+            end
+            table.insert(setupGroups[setupKey].items, itemDisplayName)
+          end
+
+          local orderedGroups = {}
+          local noSetupGroupKey = nil
+          for _, key in ipairs(groupOrder) do
+            if key == "" then
+              noSetupGroupKey = key
+            else
+              table.insert(orderedGroups, key)
+            end
+          end
+          if noSetupGroupKey then
+            table.insert(orderedGroups, noSetupGroupKey)
+          end
+
+          local setupColor = COLORS.AQUA or COLORS.CYAN
+          for gIdx, key in ipairs(orderedGroups) do
+            local group = setupGroups[key]
+            for _, itemDisplayName in ipairs(group.items) do
+              table.insert(tooltipLines, string.format("  - %s", itemDisplayName))
+            end
+            if group.setups and #group.setups > 0 then
+              local setupLine = string.format("    %s", Colorize(setupColor, "(" .. XLGB_GetString("WW_SETUPS_COUNT") .. group.setupKey .. ")"))
+              table.insert(tooltipLines, setupLine)
+            end
+            if gIdx < #orderedGroups then
+              table.insert(tooltipLines, "")
+            end
+          end
+        else
+          for _, item in ipairs(gearSet.items) do
+            local itemDisplayName = item.link or item.ID or ""
+            table.insert(tooltipLines, string.format("  - %s", itemDisplayName))
+          end
+        end
+      end
+
+      if data.displayName and data.displayName ~= data.setName then
+        table.insert(tooltipLines, "")
+        table.insert(tooltipLines, Colorize(COLORS.GREY, data.setName))
+      end
+
+      SetTooltipText(InformationTooltip, table.concat(tooltipLines, "\n"))
     end
   end)
   control:SetHandler("OnMouseExit", function(ctrl)
@@ -1077,13 +1307,13 @@ function XLGB_UI:SetupPageDialogs()
     function()
       if xl.deletedPageSets and #xl.deletedPageSets > 0 then
         local count = 0
-        local isDeletedPageWW = (string.sub(xl.deletedPageName or "", 1, 5) == "[WW] ")
+        local isDeletedPageWW = xl.deletedPageIsWW or (string.sub(xl.deletedPageName or "", 1, 5) == "[WW] ")
         for _, setName in ipairs(xl.deletedPageSets) do
           local gsIndex = XLGB_GearSet:GetGearSetIndex(setName)
           if gsIndex and gsIndex > 0 then
             local gs = XLGB_GearSet:GetGearSet(gsIndex)
             -- Si la page supprimée est une page WW, on ne supprime STRICTEMENT que ses sets d'importation WW
-            if gs and (not isDeletedPageWW or string.sub(gs.name or "", 1, 5) == "[WW] ") then
+            if gs and (not isDeletedPageWW or gs.isWW or string.sub(gs.name or "", 1, 5) == "[WW] ") then
               XLGB_GearSet:RemoveGearSet(gsIndex)
               count = count + 1
             end
@@ -1143,6 +1373,16 @@ local function InitUIPageVariables()
   ui.page.titleRow.hide = XLGB_PageWindow_TitleRow_Hide
   if ui.page.titleRow.title then
     ui.page.titleRow.title:SetText(XLGB_GetString("TITLE_PAGE"))
+  end
+
+  ui.page.tabRow = XLGB_PageWindow_TabRow
+  ui.page.tabRow.tabCustom = XLGB_PageWindow_TabRow_TabCustom
+  ui.page.tabRow.tabWW = XLGB_PageWindow_TabRow_TabWW
+  if ui.page.tabRow.tabCustom and ui.page.tabRow.tabCustom:GetNamedChild("_Label") then
+    ui.page.tabRow.tabCustom:GetNamedChild("_Label"):SetText(XLGB_GetString("PAGE_TAB_CUSTOM"))
+  end
+  if ui.page.tabRow.tabWW and ui.page.tabRow.tabWW:GetNamedChild("_Label") then
+    ui.page.tabRow.tabWW:GetNamedChild("_Label"):SetText(XLGB_GetString("PAGE_TAB_WW"))
   end
 
   ui.page.pageRow = XLGB_PageWindow_PageRow
@@ -1321,6 +1561,11 @@ end
 
 function XLGB_UI:AddRemoveSet()
   if not xl.isSetEditable then
+    local activeTab = (sV and sV.setCategoryTab) or 1
+    if activeTab == 2 then
+      XLGB_UI:ToggleWardrobeUI()
+      return
+    end
     XLGB_UI:AddSet()
   else
     XLGB_UI:RemoveSet()
@@ -1331,6 +1576,9 @@ function XLGB_UI:AddRemoveSet()
 end
 
 function XLGB_UI:AddSet()
+  if sV then
+    sV.setCategoryTab = 1
+  end
   local newSetName = XLGB_GearSet:GenerateNewSet()
   sV.displayingSet = XLGB_GearSet:GetGearSetIndex(newSetName)
   XLGB_UI:SelectSet(sV.displayingSet)
@@ -1405,6 +1653,22 @@ local function ShowItemTooltip(self)
   self:GetNamedChild("_BG"):SetHidden(false)
   InitializeTooltip(ItemTooltip, self)
   ItemTooltip:SetLink(self.data.itemLink)
+
+  local currentSet = (self.data and self.data.gearSet) or (sV and sV.displayingSet and sV.displayingSet > 0 and XLGB_GearSet:GetGearSet(sV.displayingSet))
+  local contextKey = currentSet and (currentSet.pageName or currentSet.name or "") or ""
+  local setups = self.data and self.data.setups
+  if (not setups or #setups == 0 or (self.data and self.data._scopedTo ~= contextKey)) and XLGB_Wardrobe and XLGB_Wardrobe.GetSetupsForItem then
+    setups = XLGB_Wardrobe:GetSetupsForItem(self.data.itemRef or self.data, currentSet)
+    if self.data then
+      self.data.setups = setups
+      self.data._scopedTo = contextKey
+    end
+  end
+
+  if setups and #setups > 0 then
+    ItemTooltip:AddVerticalPadding(8)
+    ItemTooltip:AddLine(XLGB_GetString("WW_SETUPS_COUNT") .. table.concat(setups, ", "), "ZoFontGameSmall", 0.7, 0.9, 1)
+  end
 end
 
 local function HideItemTooltip(self)
@@ -1444,7 +1708,9 @@ end
 local function InitSetWindowTooltips()
   CreateSetTooltip(ui.set.setRow.edit, XLGB_GetString("SET_TOOLTIP_EDIT_CURRENT"), XLGB_GetString("SET_TOOLTIP_DISCARD"))
   CreateSetTooltip(ui.set.setRow.accept, XLGB_GetString("SET_TOOLTIP_ACCEPT"))
-  CreateSetTooltip(ui.set.setRow.addRemoveSet, XLGB_GetString("SET_TOOLTIP_CREATE_NEW"), XLGB_GetString("SET_TOOLTIP_REMOVE_CURRENT"))
+  CreateSetTooltip(ui.set.setRow.addRemoveSet, function()
+    return (sV and sV.setCategoryTab == 2) and XLGB_GetString("SET_TOOLTIP_ADD_WW") or XLGB_GetString("SET_TOOLTIP_CREATE_NEW")
+  end, XLGB_GetString("SET_TOOLTIP_REMOVE_CURRENT"))
   CreateSetTooltip(ui.set.addItemsRow.addEquipped, XLGB_GetString("SET_TOOLTIP_ADD_EQUIPPED"))
   if ui.set.bankSetRow and ui.set.bankSetRow.label then
     CreateSetTooltip(ui.set.bankSetRow.label, XLGB_GetString("SET_TOOLTIP_LIBSETS_BAG"))
@@ -1497,29 +1763,126 @@ function XLGB_UI:SelectSet(setNumber)
     sV.displayingSet = setNumber
   end
 
-  -- XLGB_GearSet:UpdateGearSetItems(sV.displayingSet)
+  if sV then
+    local gs = XLGB_GearSet:GetGearSet(sV.displayingSet)
+    if gs then
+      local isWW = gs.isWW or (string.sub(gs.name or "", 1, 5) == "[WW] ")
+      if isWW then
+        sV.setCategoryTab = 2
+        sV.lastWWSet = sV.displayingSet
+      else
+        sV.setCategoryTab = 1
+        sV.lastCustomSet = sV.displayingSet
+      end
+    end
+  end
+
   XLGB_UI:UpdateSetScrollList()
   if ui.set and ui.set.bankSetRow and not ui.set.bankSetRow:IsHidden() then
     XLGB_UI:UpdateBankSetDropdown()
   end
 end
 
+function XLGB_UI:SelectSetCategoryTab(tabIndex)
+  if sV then
+    sV.setCategoryTab = tabIndex
+  end
+  XLGB_UI:UpdateSetDropdown()
+  XLGB_UI:UpdateSetScrollList()
+  XLGB_UI:ShowOrHideEditSet()
+end
+
 function XLGB_UI:UpdateSetDropdown()
-  local dd = ui.set.setRow.set.dropdown
+  local dd = ui.set and ui.set.setRow and ui.set.setRow.set and ui.set.setRow.set.dropdown
+  if not dd then return end
+
+  local activeTab = (sV and sV.setCategoryTab) or 1
+
+  local customSets = {}
+  local wwSets = {}
+  local totalSets = XLGB_GearSet:GetNumberOfGearSets()
+  for i = 1, totalSets do
+    local gs = XLGB_GearSet:GetGearSet(i)
+    if gs then
+      local isWW = gs.isWW or (string.sub(gs.name or "", 1, 5) == "[WW] ")
+      local displayName = gs.name or ""
+      if isWW and string.sub(displayName, 1, 5) == "[WW] " then
+        displayName = string.sub(displayName, 6)
+      end
+      if isWW then
+        table.insert(wwSets, { index = i, name = gs.name, displayName = displayName })
+      else
+        table.insert(customSets, { index = i, name = gs.name, displayName = displayName })
+      end
+    end
+  end
+
+  local tabRow = ui.set and ui.set.tabRow
+  if tabRow then
+    local tabCustomLabel = tabRow.tabCustom and tabRow.tabCustom:GetNamedChild("_Label")
+    local tabWWLabel = tabRow.tabWW and tabRow.tabWW:GetNamedChild("_Label")
+    if tabCustomLabel then
+      tabCustomLabel:SetText(string.format("%s (%d)", XLGB_GetString("SET_TAB_CUSTOM"), #customSets))
+      tabCustomLabel:SetColor(unpack(activeTab == 1 and COLORS.RGBA.TAB_ACTIVE or COLORS.RGBA.TAB_MUTED))
+    end
+    if tabWWLabel then
+      tabWWLabel:SetText(string.format("%s (%d)", XLGB_GetString("SET_TAB_WW"), #wwSets))
+      tabWWLabel:SetColor(unpack(activeTab == 2 and COLORS.RGBA.TAB_ACTIVE or COLORS.RGBA.TAB_MUTED))
+    end
+  end
+
   dd:ClearItems()
-  for i = 1, XLGB_GearSet:GetNumberOfGearSets() do
+  local currentList = (activeTab == 2) and wwSets or customSets
+
+  if #currentList == 0 then
+    local emptyText = (activeTab == 2) and XLGB_GetString("SET_NO_SETS_WW") or XLGB_GetString("SET_NO_SETS_CUSTOM")
+    dd:SetSelectedItemText(emptyText)
+    return
+  end
+
+  local selectedRelativeIndex = 1
+  local foundCurrent = false
+
+  for relIdx, item in ipairs(currentList) do
     local entry =
       ZO_ComboBox:CreateItemEntry(
-      XLGB_GearSet:GetGearSet(i).name,
+      item.displayName,
       function()
-        XLGB_UI:SelectSet(i)
+        XLGB_UI:SelectSet(item.index)
+        if sV then
+          if activeTab == 2 then
+            sV.lastWWSet = item.index
+          else
+            sV.lastCustomSet = item.index
+          end
+        end
       end
     )
     dd:AddItem(entry, ZO_COMBOBOX_SUPRESS_UPDATE)
+    if sV and sV.displayingSet == item.index then
+      selectedRelativeIndex = relIdx
+      foundCurrent = true
+    end
   end
-  if XLGB_GearSet:GetNumberOfGearSets() > 0 and sV.displayingSet and sV.displayingSet > 0 then
-    dd:SelectItemByIndex(sV.displayingSet, true)
+
+  if not foundCurrent then
+    local preferredIndex = sV and ((activeTab == 2) and sV.lastWWSet or sV.lastCustomSet)
+    if preferredIndex then
+      for relIdx, item in ipairs(currentList) do
+        if item.index == preferredIndex then
+          selectedRelativeIndex = relIdx
+          break
+        end
+      end
+    end
+    local targetSet = currentList[selectedRelativeIndex]
+    if targetSet and sV then
+      sV.displayingSet = targetSet.index
+      XLGB_UI:UpdateSetScrollList()
+    end
   end
+
+  dd:SelectItemByIndex(selectedRelativeIndex, true)
 end
 
 local function setupScrollableComboBoxWithAutoReset(parentControl, containerControl, options)
@@ -1847,12 +2210,21 @@ function XLGB_UI:UpdateSetScrollList()
     local gearSet = XLGB_GearSet:GetGearSet(sV.displayingSet)
     if gearSet and gearSet.items then
       for _, item in pairs(gearSet.items) do
+        local setups = item.setups
+        local contextKey = gearSet and (gearSet.pageName or gearSet.name or "") or ""
+        if (not setups or #setups == 0 or item._scopedTo ~= contextKey) and (gearSet.isWW or (sV and sV.setCategoryTab == 2)) and XLGB_Wardrobe and XLGB_Wardrobe.GetSetupsForItem then
+          setups = XLGB_Wardrobe:GetSetupsForItem(item, gearSet)
+        end
         local dataEntry =
           ZO_ScrollList_CreateDataEntry(
           XLGB_Constants.ITEM_ROW,
           {
             itemLink = item.link,
-            itemID = item.ID
+            itemID = item.ID,
+            setups = setups,
+            itemRef = item,
+            gearSet = gearSet,
+            _scopedTo = contextKey,
           }
         )
         table.insert(scrollData, dataEntry)
@@ -2022,6 +2394,16 @@ local function InitUISetVariables()
     end
   end
 
+  ui.set.tabRow = XLGB_SetWindow_TabRow
+  ui.set.tabRow.tabCustom = XLGB_SetWindow_TabRow_TabCustom
+  ui.set.tabRow.tabWW = XLGB_SetWindow_TabRow_TabWW
+  if ui.set.tabRow.tabCustom and ui.set.tabRow.tabCustom:GetNamedChild("_Label") then
+    ui.set.tabRow.tabCustom:GetNamedChild("_Label"):SetText(XLGB_GetString("SET_TAB_CUSTOM"))
+  end
+  if ui.set.tabRow.tabWW and ui.set.tabRow.tabWW:GetNamedChild("_Label") then
+    ui.set.tabRow.tabWW:GetNamedChild("_Label"):SetText(XLGB_GetString("SET_TAB_WW"))
+  end
+
   ui.set.setRow = XLGB_SetWindow_SetRow
   ui.set.setRow.edit = XLGB_SetWindow_SetRow_EditSet
   ui.set.setRow.editName = XLGB_SetWindow_SetRow_EditSetName
@@ -2140,7 +2522,7 @@ local function updateProgressBar(nextSetName, pretext)
   p.progressRow.xOfY:SetText("[" .. tostring(p.x) .. "/" .. tostring(p.y) .. "]")
   setProgressBar(p.x, p.y)
   defaultSetRowInfo()
-  p.setRow.setInfo:SetText(pretext .. " set '|cffecbc" .. nextSetName .. "|r'")
+  p.setRow.setInfo:SetText(pretext .. " set '" .. Colorize(COLORS.GOLD, nextSetName) .. "'")
 end
 
 local function hideProgress()
@@ -2196,6 +2578,14 @@ function XLGB_UI:OnPageWithdrawNextSet(nextSetName)
   updateProgressBar(nextSetName, XLGB_GetString("QUALITY_WITHDRAW_NAME"))
 end
 
+local iifaLocationCache = {}
+local iifaDbKeyCache = {}
+
+function XLGB_UI:ClearIIfACache()
+  iifaLocationCache = {}
+  iifaDbKeyCache = {}
+end
+
 local function hookIIfAQuery()
   if not IIfA or type(IIfA.QueryAccountInventory) ~= "function" or IIfA._XLGB_Hooked then return end
   IIfA._XLGB_Hooked = true
@@ -2214,12 +2604,17 @@ local function hookIIfAQuery()
         if db then
           local itemId = itemLink:match(":item:(%d+):")
           if itemId then
-            local pattern = ":item:" .. itemId .. ":"
-            for dbKey in pairs(db) do
-              if dbKey:match(pattern) then
-                res = origQuery(self, dbKey)
-                if res and res.locations and #res.locations > 0 then
-                  break
+            if iifaDbKeyCache[itemId] then
+              res = origQuery(self, iifaDbKeyCache[itemId])
+            else
+              local pattern = ":item:" .. itemId .. ":"
+              for dbKey in pairs(db) do
+                if dbKey:match(pattern) then
+                  res = origQuery(self, dbKey)
+                  if res and res.locations and #res.locations > 0 then
+                    iifaDbKeyCache[itemId] = dbKey
+                    break
+                  end
                 end
               end
             end
@@ -2232,10 +2627,22 @@ local function hookIIfAQuery()
 end
 
 local function formatIIfALocations(itemLink)
+  if not itemLink or itemLink == "" then return nil end
+  if iifaLocationCache[itemLink] ~= nil then
+    local cached = iifaLocationCache[itemLink]
+    return (cached ~= false) and cached or nil
+  end
+
   hookIIfAQuery()
-  if not IIfA or type(IIfA.QueryAccountInventory) ~= "function" then return nil end
+  if not IIfA or type(IIfA.QueryAccountInventory) ~= "function" then
+    iifaLocationCache[itemLink] = false
+    return nil
+  end
   local query = IIfA:QueryAccountInventory(itemLink)
-  if not query or not query.locations or #query.locations == 0 then return nil end
+  if not query or not query.locations or #query.locations == 0 then
+    iifaLocationCache[itemLink] = false
+    return nil
+  end
 
   local equippedLabel = (XLGB_GetString and XLGB_GetString("MISSING_ITEM_LOC_EQUIPPED")) or "Equipped"
   local bagLabel = (XLGB_GetString and XLGB_GetString("MISSING_ITEM_LOC_BAG")) or "Bag"
@@ -2270,16 +2677,15 @@ local function formatIIfALocations(itemLink)
     end
   end
 
-  if #locStrings > 0 then
-    return table.concat(locStrings, ", ")
-  end
-  return nil
+  local formattedResult = (#locStrings > 0) and table.concat(locStrings, ", ") or nil
+  iifaLocationCache[itemLink] = formattedResult or false
+  return formattedResult
 end
 
 local function printMissingItemsReport(setName, missingItems)
   if not missingItems or #missingItems == 0 then return end
 
-  local headerFmt = (XLGB_GetString and XLGB_GetString("MISSING_ITEMS_REPORT_HEADER")) or "|cFF9900[XLGB]|r Missing pieces for '%s' (%d):"
+  local headerFmt = (XLGB_GetString and XLGB_GetString("MISSING_ITEMS_REPORT_HEADER")) or (COLORS.ORANGE .. "[XLGB]|r Missing pieces for '%s' (%d):")
   d(string.format(headerFmt, tostring(setName), #missingItems))
 
   for _, itemLink in ipairs(missingItems) do
@@ -2299,9 +2705,9 @@ local function printMissingItemsReport(setName, missingItems)
     end
 
     if locText and locText ~= "" then
-      d(string.format("  |cFFD700•|r %s -> |c88BBFF%s|r", chatItemLink, locText))
+      d(string.format("  " .. COLORS.GOLD_LIGHT .. " - |r %s -> " .. COLORS.BLUE_SOFT .. "%s|r", chatItemLink, locText))
     else
-      d(string.format("  |cFFD700•|r %s", chatItemLink))
+      d(string.format("  " .. COLORS.GOLD_LIGHT .. " - |r %s", chatItemLink))
     end
   end
 end
@@ -2569,7 +2975,7 @@ end
 
 local function fillMissingSetsRowWithData(control, data)
   control.data = data
-  control:GetNamedChild("_Name"):SetText("|cffecbc" .. data.name .. "|r")
+  control:GetNamedChild("_Name"):SetText(Colorize(COLORS.GOLD, data.name))
   control:GetNamedChild("_Amount"):SetText("(" .. tostring(data.amount) .. ")")
 end
 
@@ -2640,19 +3046,20 @@ local function fillWardrobeHeaderRowWithData(control, data)
   local quickSetBtn = control:GetNamedChild("_QuickSet")
 
   local sV = XLGearBanker.savedVariables
-  local isCurrentTarget = (sV and sV.quickSetTargetName and sV.quickSetTargetName ~= "" and sV.quickSetTargetName == data.name)
+  local isCurrentTarget1 = (sV and sV.quickSetTargetName and sV.quickSetTargetName ~= "" and sV.quickSetTargetName == data.name)
+  local isCurrentTarget2 = (sV and sV.quickSetTargetName2 and sV.quickSetTargetName2 ~= "" and sV.quickSetTargetName2 == data.name)
 
   if nameLabel then
-    nameLabel:SetText("|cffecbc" .. (data.name or "") .. "|r")
+    nameLabel:SetText(Colorize(COLORS.GOLD, data.name or ""))
   end
 
   if countLabel then
     if data.total and data.total > 0 then
       local parts = {}
-      if data.worn and data.worn > 0 then table.insert(parts, "|c00ff00" .. string.format(XLGB_GetString("WW_STAT_WORN"), data.worn) .. "|r") end
-      if data.bag and data.bag > 0 then table.insert(parts, "|c55ff55" .. string.format(XLGB_GetString("WW_STAT_BAG"), data.bag) .. "|r") end
-      if data.bank and data.bank > 0 then table.insert(parts, "|c5599ff" .. string.format(XLGB_GetString("WW_STAT_BANK"), data.bank) .. "|r") end
-      if data.missing and data.missing > 0 then table.insert(parts, "|cff5555" .. string.format(XLGB_GetString("WW_STAT_MISSING"), data.missing) .. "|r") end
+      if data.worn and data.worn > 0 then table.insert(parts, Colorize(COLORS.WORN, string.format(XLGB_GetString("WW_STAT_WORN"), data.worn))) end
+      if data.bag and data.bag > 0 then table.insert(parts, Colorize(COLORS.BAG, string.format(XLGB_GetString("WW_STAT_BAG"), data.bag))) end
+      if data.bank and data.bank > 0 then table.insert(parts, Colorize(COLORS.BANK, string.format(XLGB_GetString("WW_STAT_BANK"), data.bank))) end
+      if data.missing and data.missing > 0 then table.insert(parts, Colorize(COLORS.MISSING, string.format(XLGB_GetString("WW_STAT_MISSING"), data.missing))) end
 
       local statusStr = (#parts > 0) and (" (" .. table.concat(parts, ", ") .. ")") or ""
       if statusStr ~= "" then
@@ -2671,32 +3078,79 @@ local function fillWardrobeHeaderRowWithData(control, data)
     local pageId = (XLGB_Wardrobe and XLGB_Wardrobe.selectedPageId) or (WizardsWardrobe and WizardsWardrobe.selection and WizardsWardrobe.selection.pageId) or 1
     local matches = (XLGB_Command and XLGB_Command.FindSetupsWithSet) and XLGB_Command:FindSetupsWithSet(zoneTag, pageId, data.name) or {}
 
-    if #matches > 1 then
-      ClearMenu()
-      local title = "|cffecbc=== " .. data.name .. " ===|r"
-      AddCustomMenuItem(title, nil)
-      local purposeText = "|cffffff" .. XLGB_GetString("QUICK_SET_CONFLICT_MENU_PURPOSE") .. "|r"
-      AddCustomMenuItem(purposeText, nil)
-      local conflictHeader = string.format("|cffff00" .. XLGB_GetString("QUICK_SET_CONFLICT_MENU_HEADER") .. "|r", data.name, #matches)
-      AddCustomMenuItem(conflictHeader, nil)
-      for _, m in ipairs(matches) do
-        local label = string.format("  > [%d] %s", m.index, m.name)
-        AddCustomMenuItem(label, function()
-          if XLGB_Command then
-            XLGB_Command:SetTargetSetName(data.name, m.index, m.name, charId, zoneTag, pageId)
-            if XLGB_UI and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
-          end
-        end)
-      end
-      ShowMenu(anchorCtrl or control)
-    else
-      local idx = (matches[1] and matches[1].index) or nil
-      local name = (matches[1] and matches[1].name) or nil
-      if XLGB_Command then
-        XLGB_Command:SetTargetSetName(data.name, idx, name, charId, zoneTag, pageId)
-        if XLGB_UI and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
+    local function applyToSlot(slot)
+      if #matches > 1 then
+        ClearMenu()
+        local title = Colorize(COLORS.GOLD, string.format("=== %s (Quick Set #%d) ===", data.name, slot))
+        AddCustomMenuItem(title, nil)
+        local purposeText = Colorize(COLORS.WHITE, XLGB_GetString("QUICK_SET_CONFLICT_MENU_PURPOSE"))
+        AddCustomMenuItem(purposeText, nil)
+        local conflictHeader = Colorize(COLORS.YELLOW, string.format(XLGB_GetString("QUICK_SET_CONFLICT_MENU_HEADER"), data.name, #matches))
+        AddCustomMenuItem(conflictHeader, nil)
+        for _, m in ipairs(matches) do
+          local label = string.format("  > [%d] %s", m.index, m.name)
+          AddCustomMenuItem(label, function()
+            if XLGB_Command then
+              XLGB_Command:SetTargetSetName(data.name, m.index, m.name, charId, zoneTag, pageId, slot)
+              if XLGB_UI and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
+            end
+          end)
+        end
+        ShowMenu(anchorCtrl or control)
+      else
+        local idx = (matches[1] and matches[1].index) or nil
+        local name = (matches[1] and matches[1].name) or nil
+        if XLGB_Command then
+          XLGB_Command:SetTargetSetName(data.name, idx, name, charId, zoneTag, pageId, slot)
+          if XLGB_UI and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
+        end
       end
     end
+
+    ClearMenu()
+    local title = Colorize(COLORS.GOLD, "=== " .. data.name .. " ===")
+    AddCustomMenuItem(title, nil)
+
+    local key1Str = (XLGB_Command and XLGB_Command.GetQuickSetKeybindString) and XLGB_Command:GetQuickSetKeybindString(1) or ""
+    local key2Str = (XLGB_Command and XLGB_Command.GetQuickSetKeybindString) and XLGB_Command:GetQuickSetKeybindString(2) or ""
+
+    local key1Suffix = (key1Str ~= "") and (" [" .. Colorize(COLORS.SLOT_1, key1Str) .. "]") or ""
+    local key2Suffix = (key2Str ~= "") and (" [" .. Colorize(COLORS.SLOT_2, key2Str) .. "]") or ""
+
+    local activeTag1 = isCurrentTarget1 and (" " .. Colorize(COLORS.ACTIVE, XLGB_GetString("QUALITY_STATUS_ACTIVE"))) or ""
+    local activeTag2 = isCurrentTarget2 and (" " .. Colorize(COLORS.ACTIVE, XLGB_GetString("QUALITY_STATUS_ACTIVE"))) or ""
+
+    local label1 = COLORS.SLOT_1_TAG .. "[#1]|r " .. string.format(XLGB_GetString("QUICK_SET_MENU_SET_SLOT_1"), key1Suffix) .. activeTag1
+    AddCustomMenuItem(label1, function()
+      applyToSlot(1)
+    end)
+
+    if isCurrentTarget1 then
+      local unbind1 = "   " .. Colorize(COLORS.RED, "[X] " .. XLGB_GetString("QUICK_SET_MENU_UNBIND_1"))
+      AddCustomMenuItem(unbind1, function()
+        if XLGB_Command then
+          XLGB_Command:SetTargetSetName("", nil, nil, charId, zoneTag, pageId, 1)
+          if XLGB_UI and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
+        end
+      end)
+    end
+
+    local label2 = COLORS.SLOT_2 .. "[#2]|r " .. string.format(XLGB_GetString("QUICK_SET_MENU_SET_SLOT_2"), key2Suffix) .. activeTag2
+    AddCustomMenuItem(label2, function()
+      applyToSlot(2)
+    end)
+
+    if isCurrentTarget2 then
+      local unbind2 = "   " .. Colorize(COLORS.RED, "[X] " .. XLGB_GetString("QUICK_SET_MENU_UNBIND_2"))
+      AddCustomMenuItem(unbind2, function()
+        if XLGB_Command then
+          XLGB_Command:SetTargetSetName("", nil, nil, charId, zoneTag, pageId, 2)
+          if XLGB_UI and XLGB_UI.UpdateWardrobeUI then XLGB_UI:UpdateWardrobeUI() end
+        end
+      end)
+    end
+
+    ShowMenu(anchorCtrl or control)
   end
 
   if quickSetBtn then
@@ -2717,7 +3171,9 @@ local function fillWardrobeHeaderRowWithData(control, data)
         nameLabel:SetAnchor(RIGHT, countLabel, LEFT, -8, 0)
       end
 
-      local function applyColor(r, g, b, a)
+      local function applyColor(c)
+        if not c then return end
+        local r, g, b, a = c[1], c[2], c[3], c[4]
         if quickSetIcon and quickSetIcon.SetColor then
           quickSetIcon:SetColor(r, g, b, a)
         elseif quickSetBtn.SetColor then
@@ -2725,29 +3181,33 @@ local function fillWardrobeHeaderRowWithData(control, data)
         end
       end
 
-      if isCurrentTarget then
-        applyColor(1, 0.85, 0.2, 1)
-      else
-        applyColor(0.5, 0.5, 0.5, 0.5)
+      local function restoreStarColor()
+        if isCurrentTarget1 then
+          applyColor(COLORS.RGBA.STAR_SLOT_1)
+        elseif isCurrentTarget2 then
+          applyColor(COLORS.RGBA.STAR_SLOT_2)
+        else
+          applyColor(COLORS.RGBA.STAR_MUTED)
+        end
       end
+
+      restoreStarColor()
 
       quickSetBtn:SetHandler("OnMouseEnter", function(btn)
         InitializeTooltip(InformationTooltip, btn, TOPLEFT, 0, -5, BOTTOMLEFT)
-        if isCurrentTarget then
-          SetTooltipText(InformationTooltip, string.format(XLGB_GetString("QUICK_SET_TOOLTIP_ACTIVE"), data.name))
+        if isCurrentTarget1 then
+          SetTooltipText(InformationTooltip, string.format(XLGB_GetString("QUICK_SET_TOOLTIP_ACTIVE_1"), data.name))
+        elseif isCurrentTarget2 then
+          SetTooltipText(InformationTooltip, string.format(XLGB_GetString("QUICK_SET_TOOLTIP_ACTIVE_2"), data.name))
         else
-          applyColor(1, 0.9, 0.4, 0.9)
+          applyColor(COLORS.RGBA.STAR_HOVER)
           SetTooltipText(InformationTooltip, string.format(XLGB_GetString("QUICK_SET_TOOLTIP_SET"), data.name))
         end
       end)
 
       quickSetBtn:SetHandler("OnMouseExit", function(btn)
         ClearTooltip(InformationTooltip)
-        if isCurrentTarget then
-          applyColor(1, 0.85, 0.2, 1)
-        else
-          applyColor(0.5, 0.5, 0.5, 0.5)
-        end
+        restoreStarColor()
       end)
 
       quickSetBtn:SetHandler("OnClicked", function(btn)
@@ -2767,11 +3227,16 @@ local function fillWardrobeHeaderRowWithData(control, data)
     if data and data.name and data.name ~= "" then
       InitializeTooltip(InformationTooltip, ctrl, TOPRIGHT, 0, 5, BOTTOMRIGHT)
       local tooltipText = data.name .. " (" .. string.format(XLGB_GetString("WW_PIECES_COUNT"), data.total or 0) .. ")"
+      if data.bosses and #data.bosses > 0 then
+        tooltipText = tooltipText .. "\n" .. Colorize(COLORS.AQUA, string.format(XLGB_GetString("WW_TOOLTIP_BOSSES"), table.concat(data.bosses, ", ")))
+      end
       if not data.isIsolated then
-        if isCurrentTarget then
-          tooltipText = tooltipText .. "\n|c00ff00" .. string.format(XLGB_GetString("QUICK_SET_TOOLTIP_ACTIVE"), data.name) .. "|r"
+        if isCurrentTarget1 then
+          tooltipText = tooltipText .. "\n" .. Colorize(COLORS.SLOT_1, string.format(XLGB_GetString("QUICK_SET_TOOLTIP_ACTIVE_1"), data.name))
+        elseif isCurrentTarget2 then
+          tooltipText = tooltipText .. "\n" .. Colorize(COLORS.SLOT_2, string.format(XLGB_GetString("QUICK_SET_TOOLTIP_ACTIVE_2"), data.name))
         else
-          tooltipText = tooltipText .. "\n|c888888" .. XLGB_GetString("QUICK_SET_ROW_HINT") .. "|r"
+          tooltipText = tooltipText .. "\n" .. Colorize(COLORS.GREY, XLGB_GetString("QUICK_SET_ROW_HINT"))
         end
       end
       SetTooltipText(InformationTooltip, tooltipText)
@@ -2805,13 +3270,13 @@ local function fillWardrobeItemRowWithData(control, data)
 
   if locLabel then
     if data.location == "WORN" then
-      locLabel:SetText("|c00ff00" .. XLGB_GetString("WW_LOCATION_WORN") .. "|r")
+      locLabel:SetText(Colorize(COLORS.WORN, XLGB_GetString("WW_LOCATION_WORN")))
     elseif data.location == "BAG" then
-      locLabel:SetText("|c55ff55" .. XLGB_GetString("WW_LOCATION_BAG") .. "|r")
+      locLabel:SetText(Colorize(COLORS.BAG, XLGB_GetString("WW_LOCATION_BAG")))
     elseif data.location == "BANK" then
-      locLabel:SetText("|c5599ff" .. XLGB_GetString("WW_LOCATION_BANK") .. "|r")
+      locLabel:SetText(Colorize(COLORS.BANK, XLGB_GetString("WW_LOCATION_BANK")))
     elseif data.location == "MISSING" then
-      locLabel:SetText("|cff5555" .. XLGB_GetString("WW_LOCATION_MISSING") .. "|r")
+      locLabel:SetText(Colorize(COLORS.MISSING, XLGB_GetString("WW_LOCATION_MISSING")))
     else
       locLabel:SetText("")
     end
@@ -2852,7 +3317,7 @@ local function fillWardrobeSurplusRowWithData(control, data)
   end
 
   if setLabel then
-    setLabel:SetText("|cffecbc" .. (data.setName or XLGB_GetString("WW_NO_SET")) .. "|r")
+    setLabel:SetText(Colorize(COLORS.GOLD, data.setName or XLGB_GetString("WW_NO_SET")))
   end
 
   control:SetMouseEnabled(true)
@@ -2861,6 +3326,9 @@ local function fillWardrobeSurplusRowWithData(control, data)
     if ctrl.data and ctrl.data.itemLink and ctrl.data.itemLink ~= "" then
       InitializeTooltip(ItemTooltip, ctrl, TOPRIGHT, 0, 5, BOTTOMRIGHT)
       ItemTooltip:SetLink(ctrl.data.itemLink)
+      if ctrl.data.setups and #ctrl.data.setups > 0 then
+        ItemTooltip:AddLine(Colorize(COLORS.AQUA, string.format(XLGB_GetString("WW_TOOLTIP_BOSSES"), table.concat(ctrl.data.setups, ", "))))
+      end
     end
   end)
   control:SetHandler("OnMouseExit", function(ctrl)
@@ -2920,7 +3388,7 @@ function XLGB_UI:PopulateWardrobeSelectors(preferredCharId)
   if not ui.wardrobe then return end
   if not XLGB_Wardrobe:IsWWAvailable() then
     if ui.wardrobe.summaryRow and ui.wardrobe.summaryRow.summary then
-      ui.wardrobe.summaryRow.summary:SetText("|cff5555" .. XLGB_GetString("WW_NOT_DETECTED") .. "|r")
+      ui.wardrobe.summaryRow.summary:SetText(Colorize(COLORS.RED, XLGB_GetString("WW_NOT_DETECTED")))
     end
     return
   end
@@ -2939,10 +3407,10 @@ function XLGB_UI:PopulateWardrobeSelectors(preferredCharId)
   for idx, c in ipairs(chars) do
     local label = c.name
     if c.isCurrent then
-      label = "|c00ff00" .. label .. " " .. XLGB_GetString("WW_CHAR_CURRENT") .. "|r"
+      label = Colorize(COLORS.GREEN, label .. " " .. XLGB_GetString("WW_CHAR_CURRENT"))
     end
     if c.setupCount and c.setupCount > 0 then
-      label = label .. " |c888888" .. string.format(XLGB_GetString("WW_SETUPS_COUNT_BADGE"), c.setupCount) .. "|r"
+      label = label .. " " .. Colorize(COLORS.GREY, string.format(XLGB_GetString("WW_SETUPS_COUNT_BADGE"), c.setupCount))
     end
 
     local entry = charDD:CreateItemEntry(
@@ -2989,7 +3457,7 @@ function XLGB_UI:PopulateWardrobeZones(charId, preferredZoneTag)
   for idx, z in ipairs(zones) do
     local label = z.name
     if z.setupCount and z.setupCount > 0 then
-      label = label .. " |c888888(" .. z.setupCount .. ")|r"
+      label = label .. " " .. Colorize(COLORS.GREY, "(" .. z.setupCount .. ")")
       if not firstWithSetups and z.tag ~= "GEN" then
         firstWithSetups = idx
       end
@@ -3063,11 +3531,11 @@ function XLGB_UI:SelectWardrobeTab(tabIndex)
     local tabNeededLabel = ui.wardrobe.tabRow.tabNeeded:GetNamedChild("_Label")
     local tabSurplusLabel = ui.wardrobe.tabRow.tabSurplus:GetNamedChild("_Label")
     if tabIndex == 1 then
-      if tabNeededLabel then tabNeededLabel:SetColor(0.2, 1, 0.2, 1) end
-      if tabSurplusLabel then tabSurplusLabel:SetColor(0.7, 0.7, 0.7, 1) end
+      if tabNeededLabel then tabNeededLabel:SetColor(unpack(COLORS.RGBA.TAB_ACTIVE)) end
+      if tabSurplusLabel then tabSurplusLabel:SetColor(unpack(COLORS.RGBA.TAB_MUTED)) end
     else
-      if tabNeededLabel then tabNeededLabel:SetColor(0.7, 0.7, 0.7, 1) end
-      if tabSurplusLabel then tabSurplusLabel:SetColor(1, 0.8, 0.2, 1) end
+      if tabNeededLabel then tabNeededLabel:SetColor(unpack(COLORS.RGBA.TAB_MUTED)) end
+      if tabSurplusLabel then tabSurplusLabel:SetColor(unpack(COLORS.RGBA.TAB_SURPLUS)) end
     end
   end
   XLGB_UI:UpdateWardrobeUI()
@@ -3085,14 +3553,14 @@ function XLGB_UI:UpdateWardrobeUI()
   end
 
   local neededGearMap, setsList, stats = XLGB_Wardrobe:GetPageGear(charId, zoneTag, pageId)
-  local diffItems = XLGB_Wardrobe:GetDifferenceItems(charId, zoneTag, pageId)
+  local diffItems = XLGB_Wardrobe:GetDifferenceItems(charId, zoneTag, pageId, nil, neededGearMap)
 
   if ui.wardrobe.summaryRow and ui.wardrobe.summaryRow.summary then
     local parts = {}
-    table.insert(parts, "|c00ff00" .. string.format(XLGB_GetString("WW_STAT_WORN"), stats.worn) .. "|r")
-    table.insert(parts, "|c55ff55" .. string.format(XLGB_GetString("WW_STAT_BAG"), stats.bag) .. "|r")
-    table.insert(parts, "|c5599ff" .. string.format(XLGB_GetString("WW_STAT_BANK"), stats.bank) .. "|r")
-    table.insert(parts, "|cff5555" .. string.format(XLGB_GetString("WW_STAT_MISSING"), stats.missing) .. "|r")
+    table.insert(parts, Colorize(COLORS.WORN, string.format(XLGB_GetString("WW_STAT_WORN"), stats.worn)))
+    table.insert(parts, Colorize(COLORS.BAG, string.format(XLGB_GetString("WW_STAT_BAG"), stats.bag)))
+    table.insert(parts, Colorize(COLORS.BANK, string.format(XLGB_GetString("WW_STAT_BANK"), stats.bank)))
+    table.insert(parts, Colorize(COLORS.MISSING, string.format(XLGB_GetString("WW_STAT_MISSING"), stats.missing)))
     local statusStr = table.concat(parts, ", ")
     local summaryStr = string.format(XLGB_GetString("WW_SUMMARY_FULL"), stats.total, statusStr, #diffItems)
     ui.wardrobe.summaryRow.summary:SetText(summaryStr)
@@ -3131,6 +3599,7 @@ function XLGB_UI:UpdateWardrobeUI()
             bag = setGroup.bag,
             bank = setGroup.bank,
             missing = setGroup.missing,
+            bosses = setGroup.bosses,
           }
         )
         table.insert(scrollData, headerEntry)

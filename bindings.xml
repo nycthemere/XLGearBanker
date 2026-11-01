@@ -5,7 +5,10 @@
 				<Down>XLGB_UI:ToggleAllUI()</Down>
 			</Action>
 			<Action name="XLGB_QUICK_SET_TOGGLE" rebindable="true">
-				<Down>XLGB_Command:OnQuickSetKeybindPressed()</Down>
+				<Down>XLGB_Command:OnQuickSetKeybindPressed(1)</Down>
+			</Action>
+			<Action name="XLGB_QUICK_SET_2_TOGGLE" rebindable="true">
+				<Down>XLGB_Command:OnQuickSetKeybindPressed(2)</Down>
 			</Action>
 		</Category>
 	</Layer>
